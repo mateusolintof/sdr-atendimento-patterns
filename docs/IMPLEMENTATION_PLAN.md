@@ -217,6 +217,7 @@ Cada entrada inclui: trigger, contrato de entrada, decisões determinísticas (e
        - `contacts.do_not_contact = false`
        - `leads.scheduled_at IS NULL`
        - não recebeu campanha nos últimos 30 dias (se houver `campaign_contacts` anterior)
+       - **etapa Kommo ≠ AGENDADO** (decisão 2026-05-14: pular se já tem consulta marcada; `skip_reason='ja_agendado_kommo'`)
      - Falha → `campaign_contacts.status='skipped'` + `skip_reason`.
      - Sucesso → `campaign_contacts.status='queued'` + `eligibility_reason='kommo_csv_import'` + `personalized_context` (texto curto montado dos campos Kommo, ver IGOR_11).
 - **LLM**: não.
