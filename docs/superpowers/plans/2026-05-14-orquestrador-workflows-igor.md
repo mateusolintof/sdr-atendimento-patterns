@@ -13,6 +13,16 @@
 - Plano funcional: `docs/IMPLEMENTATION_PLAN.md` (§2 catálogo, §3 contratos, §4 bloqueios, §5 DDL)
 - Padrão técnico: `docs/referencias/workflows-asx/*.json`
 
+**Nota sobre credentials Supabase** (decidido em 2026-05-14): credencial primária é
+`igor_supabase_postgres` (tipo Postgres, Session Pooler) — alinha com padrão ASX,
+permite SQL com CTEs, atende Postgres Chat Memory. `igor_supabase_service` (tipo
+Supabase API) fica como alternativa para nodes Supabase do n8n quando for mais simples
+(CRUD direto em tabela). Onde os briefs abaixo dizem "use Supabase REST via HTTP",
+ler como "use n8n Postgres node com igor_supabase_postgres".
+
+**Nota sobre contextWindow** (decidido em 2026-05-14): IGOR_03 e IGOR_13 usam
+contextWindow 25 (alinhado com ASX P2/P3), não 15/10 como originalmente.
+
 ---
 
 ## Task 1: Pre-flight — verificar credenciais n8n e inicializar state
@@ -807,7 +817,7 @@ CONTRATO §2 IGOR_03:
 - Comportamento:
   - Se safety_flags.clinical=true OR should_handoff=true → pular conversa, chamar IGOR_05 com handoff_reason='documento_clinico_sensivel'
   - Senão: conversação Alice (saudar, coletar nome, objetivo_principal, callback_period)
-- Memória: Postgres Chat Memory (credential igor_supabase_postgres), sessionKey = `after_hours_{{$json.phone}}`, contextWindow 15
+- Memória: Postgres Chat Memory (credential igor_supabase_postgres), sessionKey = `after_hours_{{$json.phone}}`, contextWindow 25
 - Modelo: gpt-5.4-mini, temperature 0.3
 - Tools (toolWorkflow, descrições EXATAS):
   - set_label_and_attr → IGOR_04 — descrição: "Use para aplicar labels e custom attributes na conversa Chatwoot. Use depois de coletar nome E objetivo E período."
@@ -922,7 +932,7 @@ ALVO: IGOR_13_Agent_Campaign
 TIPO: executeWorkflowTrigger (callable)
 PADRÃO: idêntico ao IGOR_03, mas system prompt diferente (oferta R$600 + T Sculptor + booking_fee R$180; sem mencionar valores que não estejam em campaign_runs).
 Tools: idem IGOR_03 (set_label_and_attr, save_lead_partial, update_conversation_state, trigger_handoff via IGOR_05).
-Memory: Postgres Chat Memory, sessionKey = `campaign_{{$json.phone}}`, contextWindow 10 (menor que receptivo — conversa de campanha é mais curta).
+Memory: Postgres Chat Memory, sessionKey = `campaign_{{$json.phone}}`, contextWindow 25 (menor que receptivo — conversa de campanha é mais curta).
 Modelo: gpt-5.4-mini, temperature 0.3.
 
 SYSTEM PROMPT (esqueleto):
