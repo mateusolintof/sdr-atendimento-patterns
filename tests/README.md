@@ -39,3 +39,49 @@ Cada assert deve retornar **≥1 linha** para passar.
 ## Formato de `tests/expected-<workflow>.md`
 
 Texto humano descrevendo o que acontece end-to-end. Útil para entender sem ler SQL. Atualizar se o comportamento mudar.
+
+## Dispatch strategy (per-trigger-type)
+
+Como a public API do n8n não expõe `POST /workflows/{id}/execute`, o
+`scripts/test-workflow.sh` detecta o tipo de trigger primário do workflow alvo
+(via `GET /api/v1/workflows/{id}`) e despacha conforme:
+
+| Trigger | Estratégia | Helper workflow |
+|---|---|---|
+| `webhook` | POST direto no webhook URL do workflow (`${N8N_WEBHOOK_URL}/webhook/{path}`) | — |
+| `errorTrigger` | POST no canary `IGOR_TEST_Failing_Workflow` (path `igor-test-canary`); canary tem `settings.errorWorkflow` setado para o target | `IGOR_TEST_Failing_Workflow` |
+| `executeWorkflowTrigger`, `scheduleTrigger`, `manualTrigger` | POST no trampoline `IGOR_TEST_Trampoline` (path `igor-test-trampoline`); trampoline invoca o target via `executeWorkflow` node com workflowId dinâmico | `IGOR_TEST_Trampoline` |
+
+Quando o workflow alvo tem múltiplos triggers, prioridade:
+`errorTrigger > executeWorkflowTrigger > scheduleTrigger > webhook > manualTrigger`.
+
+Os 2 helpers (canary + trampoline) ficam permanentemente ativos. Reimportar
+qualquer um via `scripts/import-workflow.sh` mantém o estado mas reseta `active`
+para `false` — reativar com `POST /api/v1/workflows/{id}/activate`.
+
+### Como o canary propaga `test_run_id`
+
+n8n só preserva `{level,tags,description,lineNumber,message,stack}` do Error no
+payload do errorTrigger (props customizadas no objeto Error são descartadas).
+Por isso o canary embute o `test_run_id` na própria mensagem do Error:
+
+```
+throw new Error('IGOR canary simulated failure (test_run_id=' + trid + ')');
+```
+
+IGOR_07 grava esse texto em `events.payload.error_message`. Os asserts
+filtram por `payload->>'error_message' LIKE '%{{TEST_RUN_ID}}%'`.
+
+### Rotação do canary errorWorkflow
+
+O canary tem `settings.errorWorkflow` hardcoded para o id do IGOR_07
+(`ZrsbaSTlW5bqMEaS` no momento desta documentação). Se IGOR_07 for reimportado
+e o id mudar, atualizar `n8n/workflows/IGOR_TEST_Failing_Workflow.json` e
+reimportar.
+
+### HTTP 500 no dispatch errorTrigger
+
+O canary é desenhado para falhar, então o webhook retorna `HTTP 500` com
+corpo `{"message":"Error in workflow"}`. O `test-workflow.sh` aceita esse
+caso específico como dispatch bem-sucedido para `errorTrigger`.
+

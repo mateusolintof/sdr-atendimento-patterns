@@ -1,0 +1,55 @@
+{
+  "name": "IGOR_TEST_Failing_Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "igor-test-canary",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "canary-webhook-node",
+      "name": "Canary Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "igor-test-canary"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Falha intencional para disparar o errorWorkflow configurado.\n// n8n preserva apenas {level,tags,description,lineNumber,message,stack} do\n// Error no payload do errorTrigger. Por isso embutimos o test_run_id na\n// mensagem — o errorWorkflow (IGOR_07) o captura via error.message e o\n// harness filtra os asserts por LIKE '%test_run_id%'.\nconst body = $input.first().json.body || {};\nconst trid = body.test_run_id || 'none';\nthrow new Error('IGOR canary simulated failure (test_run_id=' + trid + ')');\n"
+      },
+      "id": "canary-fail-node",
+      "name": "Force Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Canary Webhook": {
+      "main": [
+        [
+          {
+            "node": "Force Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "ZrsbaSTlW5bqMEaS",
+    "executionOrder": "v1"
+  }
+}

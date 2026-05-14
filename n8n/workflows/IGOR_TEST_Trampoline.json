@@ -1,0 +1,83 @@
+{
+  "name": "IGOR_TEST_Trampoline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "igor-test-trampoline",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "trampoline-webhook-node",
+      "name": "Trampoline Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "igor-test-trampoline"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ $json.body.target_payload }}",
+        "options": {}
+      },
+      "id": "trampoline-reshape-node",
+      "name": "Reshape To Target Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Trampoline Webhook').item.json.body.target_workflow_id }}"
+        },
+        "options": {}
+      },
+      "id": "trampoline-execute-node",
+      "name": "Execute Target Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        600,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Trampoline Webhook": {
+      "main": [
+        [
+          {
+            "node": "Reshape To Target Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reshape To Target Payload": {
+      "main": [
+        [
+          {
+            "node": "Execute Target Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

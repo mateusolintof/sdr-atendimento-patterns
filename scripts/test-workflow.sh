@@ -4,9 +4,19 @@
 # Uso: bash scripts/test-workflow.sh <WORKFLOW_NAME> <FIXTURE> [<TEST_RUN_ID>]
 #   ex: bash scripts/test-workflow.sh IGOR_07_Error_Logger fixtures/error-trigger-simulated.json
 #
-# Substitui {{TEST_RUN_ID}} na fixture por um UUID novo (ou usado pelo arg 3),
-# dispara execução via POST /api/v1/workflows/{id}/execute, e roda asserts
-# em tests/asserts-<WORKFLOW_NAME>.sql substituindo {{TEST_RUN_ID}} também.
+# Substitui {{TEST_RUN_ID}} na fixture por um UUID novo (ou usado pelo arg 3).
+#
+# Como a public API do n8n NÃO expõe POST /workflows/{id}/execute, despachamos
+# por tipo de trigger primário do workflow:
+#   - webhook              → POST direto no webhook URL do target
+#   - errorTrigger         → POST no canary (IGOR_TEST_Failing_Workflow) que
+#                            falha e tem errorWorkflow setado para o target
+#   - executeWorkflowTrigger / scheduleTrigger / manualTrigger
+#                          → POST no trampoline (IGOR_TEST_Trampoline) que
+#                            invoca o target via executeWorkflow dinâmico
+#
+# Depois roda asserts em tests/asserts-<WORKFLOW_NAME>.sql substituindo
+# {{TEST_RUN_ID}} também.
 #
 # Saída: 0 se todos os asserts retornam ≥1 linha; ≠0 se algum falha.
 
@@ -39,23 +49,116 @@ if [[ -z "$WF_ID" ]]; then
   exit 2
 fi
 
+# Carregar JSON completo do workflow para detectar trigger primário
+WF_JSON=$(curl -sS "${N8N_BASE_URL%/}/api/v1/workflows/${WF_ID}" \
+  -H "X-N8N-API-KEY: ${N8N_API_KEY}")
+
+TRIGGER_TYPE=$(echo "$WF_JSON" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+triggers = [n['type'] for n in d.get('nodes', []) if n.get('type') in (
+  'n8n-nodes-base.webhook',
+  'n8n-nodes-base.errorTrigger',
+  'n8n-nodes-base.executeWorkflowTrigger',
+  'n8n-nodes-base.scheduleTrigger',
+  'n8n-nodes-base.manualTrigger',
+)]
+priority = [
+  'n8n-nodes-base.errorTrigger',
+  'n8n-nodes-base.executeWorkflowTrigger',
+  'n8n-nodes-base.scheduleTrigger',
+  'n8n-nodes-base.webhook',
+  'n8n-nodes-base.manualTrigger',
+]
+for p in priority:
+    if p in triggers:
+        print(p); break
+")
+
+if [[ -z "$TRIGGER_TYPE" ]]; then
+  echo "ERRO: workflow '$WF_NAME' não tem trigger suportado" >&2
+  exit 5
+fi
+
 # Substituir {{TEST_RUN_ID}} na fixture
 PAYLOAD=$(sed "s/{{TEST_RUN_ID}}/${TEST_RUN_ID}/g" "$FIXTURE")
 
-# Disparar execução
-echo "→ Executando $WF_NAME (id=$WF_ID, test_run_id=$TEST_RUN_ID)"
-HTTP_CODE=$(curl -sS -o /tmp/n8n-exec-$$.json -w "%{http_code}" \
-  -X POST "${N8N_BASE_URL%/}/api/v1/workflows/${WF_ID}/execute" \
-  -H "X-N8N-API-KEY: ${N8N_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d "$PAYLOAD")
-if [[ ! "$HTTP_CODE" =~ ^2 ]]; then
-  echo "ERRO: execução n8n falhou (HTTP $HTTP_CODE)" >&2
-  cat /tmp/n8n-exec-$$.json >&2
-  rm -f /tmp/n8n-exec-$$.json
+echo "→ Executando $WF_NAME (id=$WF_ID, trigger=$TRIGGER_TYPE, test_run_id=$TEST_RUN_ID)"
+
+TMP_OUT="/tmp/n8n-exec-$$.json"
+
+case "$TRIGGER_TYPE" in
+  "n8n-nodes-base.errorTrigger")
+    CANARY_URL="${N8N_WEBHOOK_URL%/}/webhook/igor-test-canary"
+    DISPATCH_BODY=$(TEST_RUN_ID="$TEST_RUN_ID" python3 -c "
+import json, sys, os
+inner = json.loads(sys.argv[1])
+print(json.dumps({
+  'test_run_id': os.environ['TEST_RUN_ID'],
+  'simulated_payload': inner,
+}))
+" "$PAYLOAD")
+    HTTP_CODE=$(curl -sS -o "$TMP_OUT" -w "%{http_code}" \
+      -X POST "$CANARY_URL" \
+      -H "Content-Type: application/json" \
+      -d "$DISPATCH_BODY")
+    ;;
+  "n8n-nodes-base.webhook")
+    PATH_VAL=$(echo "$WF_JSON" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+for n in d.get('nodes', []):
+    if n.get('type') == 'n8n-nodes-base.webhook':
+        print(n.get('parameters', {}).get('path', '')); break
+")
+    if [[ -z "$PATH_VAL" ]]; then
+      echo "ERRO: webhook do workflow '$WF_NAME' não tem path" >&2
+      exit 6
+    fi
+    DIRECT_URL="${N8N_WEBHOOK_URL%/}/webhook/${PATH_VAL}"
+    HTTP_CODE=$(curl -sS -o "$TMP_OUT" -w "%{http_code}" \
+      -X POST "$DIRECT_URL" \
+      -H "Content-Type: application/json" \
+      -d "$PAYLOAD")
+    ;;
+  "n8n-nodes-base.executeWorkflowTrigger"|"n8n-nodes-base.scheduleTrigger"|"n8n-nodes-base.manualTrigger")
+    TRAMPOLINE_URL="${N8N_WEBHOOK_URL%/}/webhook/igor-test-trampoline"
+    DISPATCH_BODY=$(WF_ID="$WF_ID" python3 -c "
+import json, sys, os
+inner = json.loads(sys.argv[1])
+print(json.dumps({
+  'target_workflow_id': os.environ['WF_ID'],
+  'target_payload': inner,
+}))
+" "$PAYLOAD")
+    HTTP_CODE=$(curl -sS -o "$TMP_OUT" -w "%{http_code}" \
+      -X POST "$TRAMPOLINE_URL" \
+      -H "Content-Type: application/json" \
+      -d "$DISPATCH_BODY")
+    ;;
+  *)
+    echo "ERRO: tipo de trigger não suportado: $TRIGGER_TYPE" >&2
+    exit 5
+    ;;
+esac
+
+# Para errorTrigger: o canary É um workflow que falha de propósito, então
+# o webhook retorna 500 com {"message":"Error in workflow"}. Isso é sucesso.
+DISPATCH_OK=0
+if [[ "$HTTP_CODE" =~ ^2 ]]; then
+  DISPATCH_OK=1
+elif [[ "$TRIGGER_TYPE" == "n8n-nodes-base.errorTrigger" && "$HTTP_CODE" == "500" ]]; then
+  if grep -q '"Error in workflow"' "$TMP_OUT" 2>/dev/null; then
+    DISPATCH_OK=1
+  fi
+fi
+if [[ "$DISPATCH_OK" -ne 1 ]]; then
+  echo "ERRO: dispatch falhou (HTTP $HTTP_CODE)" >&2
+  cat "$TMP_OUT" >&2 || true
+  rm -f "$TMP_OUT"
   exit 4
 fi
-rm -f /tmp/n8n-exec-$$.json
+rm -f "$TMP_OUT"
 
 # Aguardar execução estabilizar (configurável via TEST_WAIT_SECONDS)
 sleep "${TEST_WAIT_SECONDS:-5}"
