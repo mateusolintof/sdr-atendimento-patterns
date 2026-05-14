@@ -1,0 +1,56 @@
+{
+  "name": "IGOR_07_Error_Logger",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "error-trigger-node",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, workflow_name, payload)\nVALUES ('infra_error', $1, $2::jsonb);",
+        "options": {
+          "queryReplacement": "={{ [$json.workflow?.name || '', JSON.stringify({ workflow_id: $json.workflow?.id || '', workflow_name: $json.workflow?.name || '', execution_id: $json.execution?.id || '', retry_of: $json.execution?.retryOf || null, last_node: $json.execution?.lastNodeExecuted || '', error_message: $json.execution?.error?.message || '', error_stack: $json.execution?.error?.stack || '', test_run_id: $json.test_run_id || $json.execution?.error?.test_run_id || null })] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        400,
+        0
+      ],
+      "id": "insert-event-node",
+      "name": "Insert Event",
+      "credentials": {
+        "postgres": {
+          "name": "igor_supabase_postgres"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Insert Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
