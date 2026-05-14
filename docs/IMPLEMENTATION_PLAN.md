@@ -855,7 +855,16 @@ Todos os workflows IGOR começam com o seed `workflows_enabled.IGOR_XX = false` 
 6. **Texto exato do consentimento PT-BR** (LGPD-friendly) para campanha.
 7. **LangSmith project ID e key** para Igor (atualmente `LANGCHAIN_API_KEY` vazia, `LANGCHAIN_PROJECT=igor-staging` mas tracing desligado por falta de key).
 8. **Política `holiday_policy`**: `block` (silêncio), `degraded` (Alice avisa que clínica está fechada por feriado, sem coletar callback) ou `passthrough` (responde normal).
-9. **Mensagem final do handoff** (texto fixo enviado ao lead antes de Alice se calar). Precisa de aprovação clínica/marketing.
+9. ~~**Mensagem final do handoff** (texto fixo enviado ao lead antes de Alice se calar).~~ **Decidido em 2026-05-14**: para o caminho "after-hours → callback", usar o texto abaixo. Para os outros 3 caminhos de handoff (compliance, campanha interessada, opt-out), o copy ainda precisa ser definido.
+
+   **Handoff after-hours (Opção A aprovada):**
+   ```
+   {nome}, perfeito. Já anotei tudo aqui e a equipe do Dr. Igor vai
+   te chamar no período que você indicou ({callback_period}) para
+   seguir o atendimento e ver os próximos passos. Até logo!
+   ```
+
+   Se `{nome}` não foi coletado, IGOR_03 deve substituir por `Obrigada` no início e remover a vírgula. Se `{callback_period}` não foi coletado, substituir por `o quanto antes`.
 10. **Modelo LLM para Alice** (gpt-4o-mini vs gemini-1.5-flash vs claude-haiku-4-5). Custo vs qualidade conversacional PT-BR.
 
 ---
