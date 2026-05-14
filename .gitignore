@@ -34,3 +34,6 @@ reports/*.local.md
 # Claude session state
 .remember/
 .claude/
+
+# Leads CSV (PII — nomes, telefones, emails reais)
+lista-leads/

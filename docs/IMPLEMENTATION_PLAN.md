@@ -201,18 +201,39 @@ Cada entrada inclui: trigger, contrato de entrada, decisões determinísticas (e
 - **Observabilidade**: o evento `health_check` é a fonte do dashboard operacional.
 
 ### IGOR_09_Campaign_Importer
-- **Trigger**: manual / webhook / cron (TBD — P1: CSV vs Sheets vs Supabase direto).
-- **Entrada**: `{ campaign_id, rows: [{ nome, telefone, contexto?, origem?, observacao? }] }`.
-- **Decisões**:
-  1. Validar campanha em `campaign_runs.status = 'ativo'`.
-  2. Para cada row:
-     - Normalizar telefone.
-     - Upsert `contacts`.
-     - Aplicar checklist de elegibilidade (12 critérios). Falha → `campaign_contacts.status='skipped'` + `skip_reason`.
-     - Sucesso → `campaign_contacts.status='queued'` + `eligibility_reason`.
+- **Trigger**: **manual via `scripts/import-kommo-csv.sh`** (carga inicial única; decisão fechada em 2026-05-14). Script lê os CSVs em `lista-leads/` (gitignored).
+- **Entrada**: CSVs do Kommo (formato `kommo_export_leads_*.csv`, 66 colunas, header padrão). Múltiplos CSVs são deduplicados pelo `ID` do Kommo.
+- **Decisões** (filtros adicionais que o usuário pediu para NÃO aplicar — ele pré-filtrou ao gerar os arquivos):
+  1. Validar campanha em `campaign_runs.status = 'ativo'` (vai existir após a migration `004` e um `INSERT INTO campaign_runs ...` manual).
+  2. Para cada linha:
+     - Normalizar telefone (`Celular` → strip `'`, validar `55+DDD+9 dígitos`). Inválido → `campaign_contacts.status='skipped'`, `skip_reason='invalid_phone'`.
+     - Dedup por (`source='kommo_csv_<data>'`, `external_id=ID_Kommo`) e por `phone` (se já existe contato com mesmo telefone, usar o existente).
+     - Upsert `contacts` (name, email, phone).
+     - Upsert `leads` (com `external_id`, `source`, `objective` = `Objetivo principal`, `city` = `Cidade`, e `kommo_data` JSON com os campos ricos do Kommo).
+     - Checklist universal de elegibilidade (apenas):
+       - `contacts.do_not_contact = false`
+       - `leads.scheduled_at IS NULL`
+       - não recebeu campanha nos últimos 30 dias (se houver `campaign_contacts` anterior)
+     - Falha → `campaign_contacts.status='skipped'` + `skip_reason`.
+     - Sucesso → `campaign_contacts.status='queued'` + `eligibility_reason='kommo_csv_import'` + `personalized_context` (texto curto montado dos campos Kommo, ver IGOR_11).
 - **LLM**: não.
-- **Sub-workflows**: `IGOR_04` (labels `promo_eligivel` ou `promo_skip`).
-- **Mutações**: `campaign_contacts`, `contacts`, labels Chatwoot.
+- **Sub-workflows**: `IGOR_04` (labels `promo_eligivel` para queued ou `optout`/`erro_envio` para skip).
+- **Mutações**: `contacts`, `leads`, `campaign_contacts`, labels Chatwoot.
+- **Não roda em n8n inicialmente**: é um script Bash + Python local que escreve direto no Supabase via PostgREST. Migrar para workflow n8n depois é opcional.
+
+#### Mapeamento Kommo CSV → Supabase
+
+| Coluna CSV | Destino |
+|---|---|
+| `ID` | `leads.external_id` (string) + chave de dedup |
+| `Nome completo` | `contacts.name` |
+| `Celular` | `contacts.phone` (normalizado) |
+| `Email pessoal` (ou `Email comercial`) | `contacts.email` |
+| `Cidade` | `leads.city` |
+| `Objetivo principal` | `leads.objective` |
+| `Motivo não agendamento`, `Capacidade financeira/Investimento`, `Urgência`, `Disponibilidade`, `Busca medicação`, `Tentativas anteriores`, `Perguntou método`, `Canal preferido`, `Ultima mensagem`, `Resposta IA`, `Tags`, `Funil de vendas`, `Etapa do lead` | `leads.kommo_data` (jsonb) |
+| `Primeiro Contato`, `Ultima mensagem` (data) | `leads.kommo_data.dates` |
+| `utm_*`, `gclid`, `fbclid`, `referrer` | `leads.kommo_data.attribution` |
 
 ### IGOR_10_Campaign_Dispatcher
 - **Trigger**: schedule (`*/1 * * * 1-5` durante `CAMPAIGN_SEND_WINDOW_*`).
@@ -234,11 +255,19 @@ Cada entrada inclui: trigger, contrato de entrada, decisões determinísticas (e
 
 ### IGOR_11_Campaign_Message_Generator
 - **Trigger**: callable.
-- **Entrada**: `{ campaign_id, contact: {...}, personalized_context, campaign_run: {...} }`.
+- **Entrada**: `{ campaign_id, contact: {...}, lead: { kommo_data, objective, city }, personalized_context, campaign_run: { offer_name, regular_price, promo_price, valid_until } }`.
 - **Decisões**:
-  - Carrega template-base da campanha (P1: fonte canônica).
-  - Variantes A/B/C aleatorizadas dentro do limite.
-- **LLM**: SIM — personalização baseada em histórico/objetivo do contato.
+  - Carrega template-base da campanha do `campaign_runs.media_caption` ou de uma tabela `campaign_templates` (P1 ainda em aberto se template fica em DB ou em código do workflow).
+  - Variantes A/B/C aleatorizadas (TBD se vamos fazer já no MVP).
+- **`personalized_context`** é montado por IGOR_09 (na importação) com base em `leads.kommo_data`. Texto curto (~200-400 chars) consumido pelo LLM. Exemplo:
+  ```
+  Lead Kommo. Objetivo: emagrecimento. Cidade: Salvador-BA.
+  Motivo de não agendamento anterior: "achou o valor alto".
+  Capacidade financeira informada: "até R$500/mês".
+  Urgência: média. Última conversa em 12.02.2026.
+  Tags: ["lead_morno", "interesse_emagrecimento"].
+  ```
+- **LLM**: SIM — usa `personalized_context` + dados da oferta para gerar mensagem natural. Prompt deve restringir: não inventar preço, não prometer resultado, não citar dados clínicos.
 - **Saída**: `{ message_variant, sent_message }`.
 - **Mutações**: `campaign_contacts.message_variant`, `campaign_contacts.sent_message`.
 
@@ -397,17 +426,20 @@ CREATE TABLE IF NOT EXISTS public.leads (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   contact_id           uuid NOT NULL REFERENCES public.contacts(id) ON DELETE CASCADE,
   conversation_id      uuid REFERENCES public.conversations(id) ON DELETE SET NULL,
-  source               text,
+  source               text,                       -- ex: 'kommo_csv_2026-05-14', 'whatsapp', 'meta_ads'
+  external_id          text,                       -- ex: ID do lead no Kommo (deduplicação na importação)
   status               text NOT NULL DEFAULT 'novo',
   objective            text,
   city                 text,
   callback_preference  text,
   callback_period      text,
+  kommo_data           jsonb NOT NULL DEFAULT '{}'::jsonb,  -- campos ricos do Kommo: motivo_nao_agendamento, capacidade_financeira, urgencia, disponibilidade, busca_medicacao, tentativas_anteriores, perguntou_metodo, canal_preferido, ultima_mensagem, resposta_ia, tags
   qualified_at         timestamptz,
   handoff_at           timestamptz,
   scheduled_at         timestamptz,
   created_at           timestamptz NOT NULL DEFAULT now(),
-  updated_at           timestamptz NOT NULL DEFAULT now()
+  updated_at           timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (source, external_id)
 );
 
 -- messages (espelho normalizado de Evolution + Chatwoot)
@@ -849,7 +881,7 @@ Todos os workflows IGOR começam com o seed `workflows_enabled.IGOR_XX = false` 
 
 1. **Modelo de transcrição de áudio**: Whisper-1 (OpenAI) vs Gemini 1.5 Audio. Tradeoff: custo, latência, qualidade PT-BR.
 2. **Política de feriados**: `settings.holidays` (lista manual) vs API externa (brasilapi). Lista manual é mais simples para iniciar.
-3. **Fonte canônica de lista de campanha**: CSV upload, Google Sheets API, ou Supabase direto? Afeta `IGOR_09`.
+3. ~~**Fonte canônica de lista de campanha**~~ **Decidido em 2026-05-14**: CSVs do Kommo em `lista-leads/` (gitignored), carga inicial única via `scripts/import-kommo-csv.sh`. Detalhes em §2 IGOR_09.
 4. **Threshold de opt-out para pausar campanha** (em %). Sugestão inicial: 5% nas últimas 4h pausa `IGOR_10`.
 5. **Armazenamento de mídia**: Supabase Storage (1 bucket privado), apenas URL Evolution (com TTL), ou descartar após transcrição/descrição. Sugestão: URL Evolution + transcrição em `messages.normalized_text`.
 6. **Texto exato do consentimento PT-BR** (LGPD-friendly) para campanha.
