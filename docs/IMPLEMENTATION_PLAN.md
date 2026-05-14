@@ -584,8 +584,7 @@ INSERT INTO public.settings (key, value) VALUES
       "IGOR_13": false
    }'::jsonb),
   ('after_hours_window', '{"start": "18:30", "end": "07:30", "timezone": "America/Sao_Paulo"}'::jsonb),
-  ('holidays', '[]'::jsonb),
-  ('holiday_policy', '"block"'::jsonb),
+  ('holidays', '[]'::jsonb),  -- feriado = tratamento idêntico ao fora de expediente
   ('do_not_contact_keywords', '[
       "pare","parar","para","remova","remover","cancela","cancelar","sair","saia",
       "nao quero","não quero","sem interesse","nao envia","não envia","stop","unsubscribe"
@@ -901,23 +900,48 @@ Todos os workflows IGOR começam com o seed `workflows_enabled.IGOR_XX = false` 
 ## 13. Decisões pendentes (P1)
 
 1. ~~**Modelo de transcrição de áudio**~~ **Decidido em 2026-05-14**: `gpt-4o-transcribe` da OpenAI (id da API). Preço: $0.006/min. Substitui Whisper-1 (legado). Usado em `IGOR_02_Media_Normalizer`.
-2. **Política de feriados**: `settings.holidays` (lista manual) vs API externa (brasilapi). Lista manual é mais simples para iniciar.
+2. ~~**Política de feriados**~~ **Decidido em 2026-05-14**: feriado = mesmo comportamento de fora-de-expediente. Lista manual em `settings.holidays` (array de `YYYY-MM-DD`). Quando hoje ∈ `holidays`, IGOR_01 trata como after-hours; IGOR_10 não dispara campanha.
 3. ~~**Fonte canônica de lista de campanha**~~ **Decidido em 2026-05-14**: CSVs do Kommo em `lista-leads/` (gitignored), carga inicial única via `scripts/import-kommo-csv.sh`. Detalhes em §2 IGOR_09.
-4. **Threshold de opt-out para pausar campanha** (em %). Sugestão inicial: 5% nas últimas 4h pausa `IGOR_10`.
-5. **Armazenamento de mídia**: Supabase Storage (1 bucket privado), apenas URL Evolution (com TTL), ou descartar após transcrição/descrição. Sugestão: URL Evolution + transcrição em `messages.normalized_text`.
-6. **Texto exato do consentimento PT-BR** (LGPD-friendly) para campanha.
-7. **LangSmith project ID e key** para Igor (atualmente `LANGCHAIN_API_KEY` vazia, `LANGCHAIN_PROJECT=igor-staging` mas tracing desligado por falta de key).
-8. **Política `holiday_policy`**: `block` (silêncio), `degraded` (Alice avisa que clínica está fechada por feriado, sem coletar callback) ou `passthrough` (responde normal).
-9. ~~**Mensagem final do handoff** (texto fixo enviado ao lead antes de Alice se calar).~~ **Decidido em 2026-05-14**: para o caminho "after-hours → callback", usar o texto abaixo. Para os outros 3 caminhos de handoff (compliance, campanha interessada, opt-out), o copy ainda precisa ser definido.
+4. ~~**Threshold de opt-out**~~ **Decidido em 2026-05-14**: regra simples. Tradução: se muita gente em sequência pedir para parar, a campanha auto-pausa para a gente não queimar a lista inteira. **Default**: 3 opt-outs nos últimos 20 envios → `IGOR_10` define `campaign_runs.status='pausado'` e gera evento `campaign_auto_paused`. Você reativa manualmente quando quiser.
+5. ~~**Armazenamento de mídia**~~ **Decidido em 2026-05-14**: mídia vai para o **MinIO S3 já conectado à Evolution API**. `messages.media_url` guarda a URL do objeto S3 (sem copiar para Supabase Storage). Transcrição/descrição ficam em `messages.normalized_text` e `messages.media_summary`.
+6. **Texto exato do consentimento PT-BR** (LGPD-friendly) para campanha. *Pode ficar como rodapé opcional na mensagem de campanha ou nota privada interna; não é bloqueante.*
+7. ~~**LangSmith project ID e key**~~ **Decidido em 2026-05-14**: fora de escopo da v1. Reavaliar em v2 quando precisar de tracing/evals em produção. `LANGCHAIN_TRACING_V2` permanece `false`.
+8. ~~**Política `holiday_policy`**~~ **Decidido em 2026-05-14**: feriado é tratado como after-hours (ver P1 #2 acima). Não há `holiday_policy` separada.
+9. ~~**Mensagem final do handoff**~~ **Decididos em 2026-05-14**. 4 caminhos cobertos com defaults razoáveis (você pode ajustar depois em produção):
 
-   **Handoff after-hours (Opção A aprovada):**
+   **9.1 Handoff after-hours → callback (Opção A aprovada):**
    ```
    {nome}, perfeito. Já anotei tudo aqui e a equipe do Dr. Igor vai
    te chamar no período que você indicou ({callback_period}) para
    seguir o atendimento e ver os próximos passos. Até logo!
    ```
+   Fallback se `{nome}` não coletado: substituir por `Obrigada`. Se `{callback_period}` não coletado: substituir por `o quanto antes`.
 
-   Se `{nome}` não foi coletado, IGOR_03 deve substituir por `Obrigada` no início e remover a vírgula. Se `{callback_period}` não foi coletado, substituir por `o quanto antes`.
+   **9.2 Handoff por compliance (documento clínico / imagem sensível):**
+   ```
+   Obrigada por compartilhar isso comigo. Para te orientar com a
+   atenção que esse tipo de informação merece, vou pedir para a
+   equipe do Dr. Igor analisar e te retornar pessoalmente. Aguarde,
+   por favor — em breve alguém entra em contato.
+   ```
+   Sem `{nome}`, sem `{callback_period}`. Curto, sóbrio, sem opinião clínica.
+
+   **9.3 Handoff por interesse em campanha:**
+   ```
+   Que ótimo, {nome}! Vou passar para a equipe do Dr. Igor para
+   verificarmos os horários disponíveis e seguir com o agendamento.
+   Eles entram em contato com você {callback_period} para alinhar
+   o melhor horário. Até já!
+   ```
+   Fallback `{nome}` → "Que ótimo!". Fallback `{callback_period}` → "ainda hoje".
+
+   **9.4 Confirmação de opt-out:**
+   ```
+   Tudo bem, {nome}. Vou parar de te enviar mensagens por aqui.
+   Se um dia mudar de ideia ou quiser falar com a equipe do Dr.
+   Igor, é só responder esta conversa. Cuide-se!
+   ```
+   Fallback `{nome}` → "Tudo bem".
 10. ~~**Modelo LLM para Alice**~~ **Decidido em 2026-05-14**: `gpt-5.4-mini` (OpenAI). Usado em `IGOR_03_Agent_AfterHours` e `IGOR_13_Agent_Campaign`. Credential n8n: `igor_openai`.
 
 ---
@@ -928,7 +952,7 @@ Todos os workflows IGOR começam com o seed `workflows_enabled.IGOR_XX = false` 
 2. Nome da credential Redis embarcada já configurada no n8n via Portainer.
 3. Número de WhatsApp de teste autorizado (o `TEST_WHATSAPP_NUMBER` no `.env` está SET — confirmar com o operador que é número próprio).
 4. Texto do `support_email` do Chatwoot (atualmente `alma.lancamentos@gmail.com`) — manter ou trocar para um email da clínica?
-5. Foto de perfil e nome do "agent_bot" do Chatwoot que representa o Igor.
+5. Foto de perfil do agent_bot Alice no Chatwoot (opcional, melhora UX dos atendentes humanos).
 
 ---
 
