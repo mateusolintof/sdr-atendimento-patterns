@@ -44,13 +44,21 @@ PAYLOAD=$(sed "s/{{TEST_RUN_ID}}/${TEST_RUN_ID}/g" "$FIXTURE")
 
 # Disparar execução
 echo "→ Executando $WF_NAME (id=$WF_ID, test_run_id=$TEST_RUN_ID)"
-curl -sS -X POST "${N8N_BASE_URL%/}/api/v1/workflows/${WF_ID}/execute" \
+HTTP_CODE=$(curl -sS -o /tmp/n8n-exec-$$.json -w "%{http_code}" \
+  -X POST "${N8N_BASE_URL%/}/api/v1/workflows/${WF_ID}/execute" \
   -H "X-N8N-API-KEY: ${N8N_API_KEY}" \
   -H "Content-Type: application/json" \
-  -d "$PAYLOAD" >/dev/null
+  -d "$PAYLOAD")
+if [[ ! "$HTTP_CODE" =~ ^2 ]]; then
+  echo "ERRO: execução n8n falhou (HTTP $HTTP_CODE)" >&2
+  cat /tmp/n8n-exec-$$.json >&2
+  rm -f /tmp/n8n-exec-$$.json
+  exit 4
+fi
+rm -f /tmp/n8n-exec-$$.json
 
-# Aguardar 5s para a execução estabilizar
-sleep 5
+# Aguardar execução estabilizar (configurável via TEST_WAIT_SECONDS)
+sleep "${TEST_WAIT_SECONDS:-5}"
 
 # Rodar asserts
 ASSERTS_FILE="${ROOT}/tests/asserts-${WF_NAME}.sql"
@@ -80,14 +88,25 @@ while IFS= read -r line; do
       -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
       -H "Content-Type: application/json" \
       -X POST "https://${HOST}/rest/v1/rpc/exec_sql" -d "$BODY" 2>&1 || echo "[]")
-    COUNT=$(echo "$RES" | python3 -c "import json,sys
+    COUNT_OR_ERR=$(echo "$RES" | python3 -c "
+import json, sys
 try:
-  d = json.load(sys.stdin)
-  print(len(d) if isinstance(d, list) else 0)
-except: print(0)
-" 2>/dev/null || echo "0")
-    if [[ "$COUNT" -gt 0 ]]; then
-      echo "  ✓ $NAME ($COUNT rows)"
+    d = json.load(sys.stdin)
+    if isinstance(d, list):
+        print(len(d))
+    elif isinstance(d, dict) and ('code' in d or 'message' in d):
+        print('ERR:' + str(d.get('message', d.get('code', 'unknown'))))
+    else:
+        print(0)
+except Exception as e:
+    print('ERR:parse_failed')
+" 2>/dev/null || echo "ERR:python_failed")
+
+    if [[ "$COUNT_OR_ERR" =~ ^ERR: ]]; then
+      echo "  ✗ $NAME (rpc error: ${COUNT_OR_ERR#ERR:})"
+      FAIL=$((FAIL + 1))
+    elif [[ "$COUNT_OR_ERR" -gt 0 ]]; then
+      echo "  ✓ $NAME ($COUNT_OR_ERR rows)"
       PASS=$((PASS + 1))
     else
       echo "  ✗ $NAME (0 rows)"

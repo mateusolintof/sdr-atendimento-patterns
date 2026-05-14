@@ -5,6 +5,7 @@ CREATE OR REPLACE FUNCTION public.exec_sql(query text)
 RETURNS SETOF jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   result jsonb;

@@ -22,10 +22,17 @@ EXISTING_ID=$(curl -sS "${N8N_BASE_URL%/}/api/v1/workflows" \
 
 if [[ -n "$EXISTING_ID" ]]; then
   echo "→ Atualizando $NAME (id=$EXISTING_ID)" >&2
+  CLEAN_JSON=$(python3 -c "
+import json
+d = json.load(open('$JSON'))
+for k in ('id', 'createdAt', 'updatedAt', 'versionId', 'active', 'tags'):
+    d.pop(k, None)
+print(json.dumps(d))
+")
   curl -sS -X PUT "${N8N_BASE_URL%/}/api/v1/workflows/${EXISTING_ID}" \
     -H "X-N8N-API-KEY: ${N8N_API_KEY}" \
     -H "Content-Type: application/json" \
-    -d @"$JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id') or d)"
+    -d "$CLEAN_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id') or d)"
 else
   echo "→ Criando $NAME" >&2
   curl -sS -X POST "${N8N_BASE_URL%/}/api/v1/workflows" \
