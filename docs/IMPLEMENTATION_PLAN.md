@@ -712,7 +712,7 @@ Escopo `conversation_attribute`:
 | `lead_status` | text | text | — |
 | `callback_period` | text | text | — |
 | `handoff_reason` | list | dropdown | after_hours_callback, documento_clinico_sensivel, imagem_sensivel, promo_interested, promo_doubt, human_request, mídia_desconhecida |
-| `campaign_id` | text | text | — |
+| `campaign_run_id` | text | text | UUID da campanha; nome `campaign_id` é reservado pelo Chatwoot |
 | `campaign_offer` | text | text | — |
 | `regular_price` | text | text | — |
 | `promo_price` | text | text | — |
