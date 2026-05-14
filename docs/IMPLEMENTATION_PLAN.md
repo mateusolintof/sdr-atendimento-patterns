@@ -202,7 +202,10 @@ Cada entrada inclui: trigger, contrato de entrada, decisões determinísticas (e
 
 ### IGOR_09_Campaign_Importer
 - **Trigger**: **manual via `scripts/import-kommo-csv.sh`** (carga inicial única; decisão fechada em 2026-05-14). Script lê os CSVs em `lista-leads/` (gitignored).
-- **Entrada**: CSVs do Kommo (formato `kommo_export_leads_*.csv`, 66 colunas, header padrão). Múltiplos CSVs são deduplicados pelo `ID` do Kommo.
+- **Entrada**: CSVs do Kommo (formato `kommo_export_leads_*.csv`, 66 colunas, header padrão). Carga inicial atual: **2 CSVs de pipelines diferentes** (~139 leads totais):
+  - `kommo_export_leads_2026-05-14 (1).csv` (66 leads) — `Funil = ATENDIMENTO HUMANO`, etapas `EM ATENDIMENTO`/`ESCALADO`/`AGENDADO`. Importar com `source='kommo_pipeline_humano_2026-05-14'`. Mensagem variante: `pipeline_humano` (tom pessoal — referencia conversa anterior com humano).
+  - `kommo_export_leads_2026-05-14.csv` (73 leads) — `Funil = ATENDIMENTO IA`, etapas `VALOR INFORMADO`/`QUALIFICADO`. Importar com `source='kommo_pipeline_ia_2026-05-14'`. Mensagem variante: `pipeline_ia` (tom comercial — lead já viu o preço).
+- Ambos compartilham o mesmo `campaign_run` (oferta R$600 vs R$800). Dedup geral pelo `ID` Kommo (mesmo lead em duas listas → fica com a primeira que entrar; flag de conflito em log).
 - **Decisões** (filtros adicionais que o usuário pediu para NÃO aplicar — ele pré-filtrou ao gerar os arquivos):
   1. Validar campanha em `campaign_runs.status = 'ativo'` (vai existir após a migration `004` e um `INSERT INTO campaign_runs ...` manual).
   2. Para cada linha:
