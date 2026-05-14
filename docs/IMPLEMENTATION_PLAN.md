@@ -202,10 +202,7 @@ Cada entrada inclui: trigger, contrato de entrada, decisões determinísticas (e
 
 ### IGOR_09_Campaign_Importer
 - **Trigger**: **manual via `scripts/import-kommo-csv.sh`** (carga inicial única; decisão fechada em 2026-05-14). Script lê os CSVs em `lista-leads/` (gitignored).
-- **Entrada**: CSVs do Kommo (formato `kommo_export_leads_*.csv`, 66 colunas, header padrão). Carga inicial atual: **2 CSVs de pipelines diferentes** (~139 leads totais):
-  - `kommo_export_leads_2026-05-14 (1).csv` (66 leads) — `Funil = ATENDIMENTO HUMANO`, etapas `EM ATENDIMENTO`/`ESCALADO`/`AGENDADO`. Importar com `source='kommo_pipeline_humano_2026-05-14'`. Mensagem variante: `pipeline_humano` (tom pessoal — referencia conversa anterior com humano).
-  - `kommo_export_leads_2026-05-14.csv` (73 leads) — `Funil = ATENDIMENTO IA`, etapas `VALOR INFORMADO`/`QUALIFICADO`. Importar com `source='kommo_pipeline_ia_2026-05-14'`. Mensagem variante: `pipeline_ia` (tom comercial — lead já viu o preço).
-- Ambos compartilham o mesmo `campaign_run` (oferta R$600 vs R$800). Dedup geral pelo `ID` Kommo (mesmo lead em duas listas → fica com a primeira que entrar; flag de conflito em log).
+- **Entrada**: CSVs do Kommo (formato `kommo_export_leads_*.csv`, 66 colunas, header padrão). Carga inicial atual: **2 CSVs com ~139 leads no total**. Todos importados com mesmo `source='kommo_2026-05-14'`, mesmo `campaign_run`, mesma mensagem. O `Funil de vendas` e `Etapa` do Kommo são categorização interna (humano/IA é organização nossa, não muda nada para o lead) — vão para `leads.kommo_data` apenas como metadata. Dedup pelo `ID` Kommo se mesmo lead aparecer nos dois CSVs.
 - **Decisões** (filtros adicionais que o usuário pediu para NÃO aplicar — ele pré-filtrou ao gerar os arquivos):
   1. Validar campanha em `campaign_runs.status = 'ativo'` (vai existir após a migration `004` e um `INSERT INTO campaign_runs ...` manual).
   2. Para cada linha:
@@ -259,21 +256,37 @@ Cada entrada inclui: trigger, contrato de entrada, decisões determinísticas (e
 
 ### IGOR_11_Campaign_Message_Generator
 - **Trigger**: callable.
-- **Entrada**: `{ campaign_id, contact: {...}, lead: { kommo_data, objective, city }, personalized_context, campaign_run: { offer_name, regular_price, promo_price, valid_until } }`.
+- **Entrada**: `{ campaign_id, contact: { name, phone }, campaign_run: { message_template } }`.
 - **Decisões**:
-  - Carrega template-base da campanha do `campaign_runs.media_caption` ou de uma tabela `campaign_templates` (P1 ainda em aberto se template fica em DB ou em código do workflow).
-  - Variantes A/B/C aleatorizadas (TBD se vamos fazer já no MVP).
-- **`personalized_context`** é montado por IGOR_09 (na importação) com base em `leads.kommo_data`. Texto curto (~200-400 chars) consumido pelo LLM. Exemplo:
-  ```
-  Lead Kommo. Objetivo: emagrecimento. Cidade: Salvador-BA.
-  Motivo de não agendamento anterior: "achou o valor alto".
-  Capacidade financeira informada: "até R$500/mês".
-  Urgência: média. Última conversa em 12.02.2026.
-  Tags: ["lead_morno", "interesse_emagrecimento"].
-  ```
-- **LLM**: SIM — usa `personalized_context` + dados da oferta para gerar mensagem natural. Prompt deve restringir: não inventar preço, não prometer resultado, não citar dados clínicos.
-- **Saída**: `{ message_variant, sent_message }`.
-- **Mutações**: `campaign_contacts.message_variant`, `campaign_contacts.sent_message`.
+  - Carrega `campaign_runs.message_template` (texto literal aprovado).
+  - Substitui variáveis simples: `{nome}` → `contact.name` se existir, senão remove a saudação personalizada e mantém só "Olá 😊".
+  - Sem variantes A/B no MVP (decisão 2026-05-14: template único).
+- **LLM**: **não**. Decisão 2026-05-14 — o template é texto fixo aprovado; LLM não interfere (zero risco de inventar preço, prometer resultado, ou alterar copy).
+- **`personalized_context`** continua sendo populado em `campaign_contacts` para análise futura, mas **não é usado para gerar mensagem** nesta campanha.
+- **Saída**: `{ sent_message }`.
+- **Mutações**: `campaign_contacts.sent_message`.
+
+#### Template canônico (decidido em 2026-05-14)
+
+Armazenado em `campaign_runs.message_template`:
+
+```
+Olá 😊
+
+Como você demonstrou interesse em iniciar esse cuidado com o Dr. Igor, quis te avisar antecipadamente sobre uma condição especial disponível durante o mês de maio para novos pacientes.
+
+Neste período, o investimento da consulta está em R$ 600, com taxa de agendamento de R$ 180, integralmente abatida no valor da consulta.
+
+E tem mais um detalhe, os pacientes que realizarem o agendamento neste mês ganharão 01 sessão de T Sculptor.
+
+O T Sculptor é uma tecnologia voltada para fortalecimento muscular e auxílio na redução de gordura, ajudando na definição corporal, ganho de massa muscular e melhora do contorno corporal de forma não invasiva.
+
+Como a agenda permanece limitada, estou entrando em contato primeiro com os pacientes que já haviam demonstrado interesse no acompanhamento.
+
+Se fizer sentido para você neste momento, posso verificar os horários disponíveis.
+```
+
+Não há variável obrigatória no template. Se quiser adicionar `{nome}` na saudação ("Olá, {nome} 😊"), fica como opção futura — me avise.
 
 ### IGOR_12_Campaign_Inbound_Handler
 - **Trigger**: callable (chamado por `IGOR_01` quando detecta resposta de campanha) **ou** webhook próprio caso o webhook Evolution roteie por path.
@@ -600,6 +613,10 @@ CREATE TABLE IF NOT EXISTS public.campaign_runs (
   offer_name          text NOT NULL,
   regular_price       numeric(10,2),
   promo_price         numeric(10,2),
+  booking_fee         numeric(10,2),                -- taxa de agendamento (R$ 180 na campanha atual)
+  booking_fee_note    text,                         -- ex: "integralmente abatida no valor da consulta"
+  bonuses             jsonb NOT NULL DEFAULT '[]'::jsonb,  -- ex: [{"name":"T Sculptor","description":"01 sessão"}]
+  message_template    text NOT NULL,                -- texto fixo aprovado; suporta {nome} opcional
   starts_at           timestamptz NOT NULL,
   ends_at             timestamptz NOT NULL,
   status              text NOT NULL DEFAULT 'ativo',
@@ -612,7 +629,7 @@ CREATE TABLE IF NOT EXISTS public.campaign_runs (
   created_at          timestamptz NOT NULL DEFAULT now(),
   updated_at          timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT campaign_runs_status_check CHECK (status IN ('ativo','pausado','finalizado')),
-  CONSTRAINT campaign_runs_media_type_check CHECK (media_type IN ('image','video','none'))
+  CONSTRAINT campaign_runs_media_type_check CHECK (media_type IS NULL OR media_type IN ('image','video','none'))
 );
 
 CREATE TABLE IF NOT EXISTS public.campaign_contacts (
@@ -883,7 +900,7 @@ Todos os workflows IGOR começam com o seed `workflows_enabled.IGOR_XX = false` 
 
 ## 13. Decisões pendentes (P1)
 
-1. **Modelo de transcrição de áudio**: Whisper-1 (OpenAI) vs Gemini 1.5 Audio. Tradeoff: custo, latência, qualidade PT-BR.
+1. ~~**Modelo de transcrição de áudio**~~ **Decidido em 2026-05-14**: `gpt-4o-transcribe` da OpenAI (id da API). Preço: $0.006/min. Substitui Whisper-1 (legado). Usado em `IGOR_02_Media_Normalizer`.
 2. **Política de feriados**: `settings.holidays` (lista manual) vs API externa (brasilapi). Lista manual é mais simples para iniciar.
 3. ~~**Fonte canônica de lista de campanha**~~ **Decidido em 2026-05-14**: CSVs do Kommo em `lista-leads/` (gitignored), carga inicial única via `scripts/import-kommo-csv.sh`. Detalhes em §2 IGOR_09.
 4. **Threshold de opt-out para pausar campanha** (em %). Sugestão inicial: 5% nas últimas 4h pausa `IGOR_10`.
@@ -901,7 +918,7 @@ Todos os workflows IGOR começam com o seed `workflows_enabled.IGOR_XX = false` 
    ```
 
    Se `{nome}` não foi coletado, IGOR_03 deve substituir por `Obrigada` no início e remover a vírgula. Se `{callback_period}` não foi coletado, substituir por `o quanto antes`.
-10. **Modelo LLM para Alice** (gpt-4o-mini vs gemini-1.5-flash vs claude-haiku-4-5). Custo vs qualidade conversacional PT-BR.
+10. ~~**Modelo LLM para Alice**~~ **Decidido em 2026-05-14**: `gpt-5.4-mini` (OpenAI). Usado em `IGOR_03_Agent_AfterHours` e `IGOR_13_Agent_Campaign`. Credential n8n: `igor_openai`.
 
 ---
 
