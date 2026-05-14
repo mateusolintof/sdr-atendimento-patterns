@@ -1,0 +1,530 @@
+{
+  "name": "03-Finalize-Handoff (callable)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "phone"
+            },
+            {
+              "name": "nome"
+            },
+            {
+              "name": "empresa"
+            },
+            {
+              "name": "cnpj"
+            },
+            {
+              "name": "perfil"
+            },
+            {
+              "name": "uf_atuacao"
+            },
+            {
+              "name": "volume"
+            },
+            {
+              "name": "score",
+              "type": "number"
+            },
+            {
+              "name": "class"
+            },
+            {
+              "name": "priority"
+            },
+            {
+              "name": "chatwoot_conversation_id",
+              "type": "number"
+            },
+            {
+              "name": "ja_compra_asx_regiao"
+            },
+            {
+              "name": "fornecedor_asx_regiao"
+            },
+            {
+              "name": "nfs_enviadas"
+            },
+            {
+              "name": "empresa_recente"
+            },
+            {
+              "name": "source"
+            }
+          ]
+        }
+      },
+      "id": "start",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        208,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "phone",
+              "name": "phone",
+              "value": "={{ $json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "nome",
+              "name": "nome",
+              "value": "={{ $json.nome || 'N/A' }}",
+              "type": "string"
+            },
+            {
+              "id": "empresa",
+              "name": "empresa",
+              "value": "={{ $json.empresa || 'N/A' }}",
+              "type": "string"
+            },
+            {
+              "id": "cnpj",
+              "name": "cnpj",
+              "value": "={{ ($json.cnpj || '').replace(/\\D/g, '') }}",
+              "type": "string"
+            },
+            {
+              "id": "perfil",
+              "name": "perfil",
+              "value": "={{ $json.perfil || 'N/A' }}",
+              "type": "string"
+            },
+            {
+              "id": "regiao",
+              "name": "regiao",
+              "value": "={{ $json.regiao || $json.uf_atuacao || 'N/A' }}",
+              "type": "string"
+            },
+            {
+              "id": "volume",
+              "name": "volume",
+              "value": "={{ $json.volume || 'N/A' }}",
+              "type": "string"
+            },
+            {
+              "id": "score",
+              "name": "score",
+              "value": "={{ $json.score || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "class",
+              "name": "class",
+              "value": "={{ $json.class || 'N/A' }}",
+              "type": "string"
+            },
+            {
+              "id": "priority",
+              "name": "priority",
+              "value": "={{ $json.priority || 'medium' }}",
+              "type": "string"
+            },
+            {
+              "id": "chatwoot_conversation_id",
+              "name": "chatwoot_conversation_id",
+              "value": "={{ $json.chatwoot_conversation_id }}",
+              "type": "number"
+            },
+            {
+              "id": "ja_compra_asx",
+              "name": "ja_compra_asx",
+              "value": "={{ $json.ja_compra_asx || 'nao' }}",
+              "type": "string"
+            },
+            {
+              "id": "fornecedor_atual",
+              "name": "fornecedor_atual",
+              "value": "={{ $json.fornecedor_atual || 'nenhum' }}",
+              "type": "string"
+            },
+            {
+              "id": "ja_compra_asx_regiao",
+              "name": "ja_compra_asx_regiao",
+              "value": "={{ $json.ja_compra_asx_regiao || 'N/A' }}",
+              "type": "string"
+            },
+            {
+              "id": "fornecedor_asx_regiao",
+              "name": "fornecedor_asx_regiao",
+              "value": "={{ $json.fornecedor_asx_regiao || 'N/A' }}",
+              "type": "string"
+            },
+            {
+              "id": "nfs_enviadas",
+              "name": "nfs_enviadas",
+              "value": "={{ $json.nfs_enviadas || 'false' }}",
+              "type": "string"
+            },
+            {
+              "id": "empresa_recente",
+              "name": "empresa_recente",
+              "value": "={{ $json.empresa_recente || 'false' }}",
+              "type": "string"
+            },
+            {
+              "id": "source",
+              "name": "source",
+              "value": "={{ $json.source || 'whatsapp' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "validate",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        400,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT a.id AS agent_id, a.name AS agent_name, a.phone AS agent_phone, a.inbox_id, a.team_id\nFROM agents a\nLEFT JOIN assignments asn ON asn.assignee_id = a.id\nGROUP BY a.id, a.name, a.phone, a.inbox_id, a.team_id\nORDER BY COUNT(asn.lead_id) ASC, a.id ASC\nLIMIT 1;",
+        "options": {}
+      },
+      "id": "pick-agent",
+      "name": "Pick Agent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        608,
+        304
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH contact_upsert AS (\n  INSERT INTO contacts (phone, name)\n  VALUES ($1, $2)\n  ON CONFLICT (phone) DO UPDATE SET name = EXCLUDED.name\n  RETURNING id\n),\ncompany_upsert AS (\n  INSERT INTO companies (cnpj, trade_name)\n  VALUES ($3, $4)\n  ON CONFLICT (cnpj) DO UPDATE SET\n    trade_name = COALESCE(NULLIF(EXCLUDED.trade_name, ''), companies.trade_name),\n    updated_at = NOW()\n  RETURNING id\n)\nINSERT INTO leads (\n  contact_id, company_id, perfil, regiao, volume, score,\n  class, priority, qualified_at, source,\n  ja_compra_asx_regiao, fornecedor_asx_regiao,\n  nfs_enviadas, empresa_recente\n)\nSELECT\n  (SELECT id FROM contact_upsert),\n  (SELECT id FROM company_upsert),\n  $5, $6, $7, $8::INT,\n  $9, $10, NOW(), $11,\n  $12, $13,\n  ($14 = 'true'), ($15 = 'true')\nRETURNING id AS lead_id;",
+        "options": {
+          "queryReplacement": "={{ [$node['Validate Input'].json.phone, $node['Validate Input'].json.nome, $node['Validate Input'].json.cnpj, $node['Validate Input'].json.empresa, $node['Validate Input'].json.perfil, $node['Validate Input'].json.regiao, $node['Validate Input'].json.volume, $node['Validate Input'].json.score, $node['Validate Input'].json.class, $node['Validate Input'].json.priority, $node['Validate Input'].json.source, $node['Validate Input'].json.ja_compra_asx_regiao, $node['Validate Input'].json.fornecedor_asx_regiao, $node['Validate Input'].json.nfs_enviadas, $node['Validate Input'].json.empresa_recente] }}"
+        }
+      },
+      "id": "persist-lead",
+      "name": "Persist Lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        800,
+        304
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.agenciaprospect.space/api/v1/accounts/1/conversations/{{ $node['Validate Input'].json.chatwoot_conversation_id }}/assignments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "U1DuRjHXeeuaaiBdG1hTkuR6"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"team_id\": {{ $node['Pick Agent'].json.team_id }}\n}",
+        "options": {}
+      },
+      "id": "transfer",
+      "name": "Transfer Conversation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.agenciaprospect.space/message/sendText/ASX_SDR",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "nyKMjqn18RU3KxNGBcC0wBYNwWpZ0yzM"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $node['Pick Agent'].json.agent_phone }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ '*NOVO LEAD QUALIFICADO*' + ($node['Validate Input'].json.source === 'facebook_form' ? ' (via Formulario Facebook)' : '') + '\\n\\n' + 'Nome: ' + $node['Validate Input'].json.nome + '\\n' + 'Empresa: ' + $node['Validate Input'].json.empresa + '\\n' + 'Regiao: ' + $node['Validate Input'].json.regiao + '\\n' + 'Tel: +' + $node['Validate Input'].json.phone + '\\n\\n' + 'Score: ' + $node['Validate Input'].json.class + '\\n\\n' + ($node['Validate Input'].json.ja_compra_asx === 'sim' ? 'Ja compra ASX de: ' + $node['Validate Input'].json.fornecedor_atual : 'Ainda nao compra ASX') + '\\n' + ($node['Validate Input'].json.nfs_enviadas === 'true' ? 'NFs: Enviadas' : ($node['Validate Input'].json.empresa_recente === 'true' ? 'NFs: Empresa nova' : 'NFs: Nao enviadas')) + '\\n\\n' + 'Entre em contato\\!' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "notify",
+      "name": "Notify Vendor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO assignments (lead_id, assignee_id, assigned_at)\nVALUES ($1::UUID, $2, NOW())\nRETURNING id AS assignment_id;",
+        "options": {
+          "queryReplacement": "={{ [$node['Persist Lead'].json.lead_id, $node['Pick Agent'].json.agent_id] }}"
+        }
+      },
+      "id": "create-assignment",
+      "name": "Create Assignment",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1008,
+        304
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO events (type, payload)\nVALUES ('handoff_complete', $1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ lead_id: $node[\"Persist Lead\"].json.lead_id, agent_id: $node[\"Pick Agent\"].json.agent_id, agent_name: $node[\"Pick Agent\"].json.agent_name, conversation_id: $node[\"Validate Input\"].json.chatwoot_conversation_id, phone: $node[\"Validate Input\"].json.phone, class: $node[\"Validate Input\"].json.class, source: $node[\"Validate Input\"].json.source, ja_compra_asx_regiao: $node[\"Validate Input\"].json.ja_compra_asx_regiao, nfs_enviadas: $node[\"Validate Input\"].json.nfs_enviadas, empresa_recente: $node[\"Validate Input\"].json.empresa_recente }) }}"
+        }
+      },
+      "id": "log-handoff",
+      "name": "Log Handoff",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1808,
+        304
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "status",
+              "name": "status",
+              "value": "success",
+              "type": "string"
+            },
+            {
+              "id": "lead_id",
+              "name": "lead_id",
+              "value": "={{ $node[\"Persist Lead\"].json.lead_id }}",
+              "type": "string"
+            },
+            {
+              "id": "assigned_to",
+              "name": "assigned_to",
+              "value": "={{ $node[\"Pick Agent\"].json.agent_name }}",
+              "type": "string"
+            },
+            {
+              "id": "conversation_id",
+              "name": "conversation_id",
+              "value": "={{ $node['Validate Input'].json.chatwoot_conversation_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2000,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE conversations SET inbox_id = $1 WHERE id = $2",
+        "options": {
+          "queryReplacement": "={{ [$node['Pick Agent'].json.inbox_id, $node['Validate Input'].json.chatwoot_conversation_id] }}"
+        }
+      },
+      "id": "move-inbox",
+      "name": "Move to Vendor Inbox",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1408,
+        304
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "cF07N4iaRsUbn3xC",
+          "name": "Chatwoot Postgres"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Pick Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Agent": {
+      "main": [
+        [
+          {
+            "node": "Persist Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Lead": {
+      "main": [
+        [
+          {
+            "node": "Create Assignment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Assignment": {
+      "main": [
+        [
+          {
+            "node": "Transfer Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transfer Conversation": {
+      "main": [
+        [
+          {
+            "node": "Move to Vendor Inbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Vendor": {
+      "main": [
+        [
+          {
+            "node": "Log Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Handoff": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move to Vendor Inbox": {
+      "main": [
+        [
+          {
+            "node": "Notify Vendor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "WBqj1UKzZORCANPo"
+  },
+  "versionId": "66bbf550-13c3-408b-9e73-ef7e23d453d6",
+  "meta": {
+    "instanceId": "fb9317012284aa1a397c69541492ceb6ec5692041aefd8a1573dcad18efc2be7"
+  },
+  "id": "OvvMcnq571vIb9bK",
+  "tags": []
+}

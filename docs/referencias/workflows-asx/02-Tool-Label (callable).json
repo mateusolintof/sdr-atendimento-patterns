@@ -1,0 +1,361 @@
+{
+  "name": "02-Tool-Label (callable)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "phone"
+            },
+            {
+              "name": "labels"
+            }
+          ]
+        }
+      },
+      "id": "start-tool-label",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalizar entrada: labels vem como string separada por vírgula\nconst phone = $json.phone || '';\nlet labels = [];\n\nif ($json.labels) {\n  // Se for string, separar por vírgula\n  if (typeof $json.labels === 'string') {\n    labels = $json.labels.split(',').map(l => l.trim()).filter(l => l);\n  } else if (Array.isArray($json.labels)) {\n    labels = $json.labels;\n  }\n}\n\nreturn {\n  phone: phone,\n  labels: labels\n};"
+      },
+      "id": "validate-payload",
+      "name": "Validate Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://chat.agenciaprospect.space/api/v1/accounts/1/contacts/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.phone }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "U1DuRjHXeeuaaiBdG1hTkuR6"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "search-contact",
+      "name": "Chatwoot - Search Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "condition-contact-found",
+              "leftValue": "={{ ($json.payload || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-contact-found",
+      "name": "Contact Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "contact-id",
+              "name": "contact_id",
+              "value": "={{ $json.payload[0].id }}",
+              "type": "number"
+            },
+            {
+              "id": "phone-field",
+              "name": "phone",
+              "value": "={{ $node['Validate Payload'].json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "labels-field",
+              "name": "labels",
+              "value": "={{ $node['Validate Payload'].json.labels }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-contact-id",
+      "name": "Extract Contact ID",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.agenciaprospect.space/api/v1/accounts/1/contacts/{{ $json.contact_id }}/labels",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "U1DuRjHXeeuaaiBdG1hTkuR6"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ labels: $json.labels }) }}",
+        "options": {}
+      },
+      "id": "add-labels",
+      "name": "Add Labels",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1104,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO events (type, payload) VALUES ('label_added', $1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ phone: $node['Extract Contact ID'].json.phone, labels: $node['Extract Contact ID'].json.labels, contact_id: $node['Extract Contact ID'].json.contact_id }) }}"
+        }
+      },
+      "id": "log-event",
+      "name": "Log Label Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1328,
+        160
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "success",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "labels-result",
+              "name": "labels",
+              "value": "={{ $node['Extract Contact ID'].json.labels }}",
+              "type": "array"
+            },
+            {
+              "id": "contact-id-result",
+              "name": "contact_id",
+              "value": "={{ $node['Extract Contact ID'].json.contact_id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1552,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "success",
+              "name": "success",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "error",
+              "name": "error",
+              "value": "contact_not_found",
+              "type": "string"
+            },
+            {
+              "id": "phone-error",
+              "name": "phone",
+              "value": "={{ $node['Validate Payload'].json.phone }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "respond-404",
+      "name": "Not Found Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        480
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Validate Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Payload": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot - Search Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot - Search Contact": {
+      "main": [
+        [
+          {
+            "node": "Contact Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact Found?": {
+      "main": [
+        [
+          {
+            "node": "Extract Contact ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Found Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Contact ID": {
+      "main": [
+        [
+          {
+            "node": "Add Labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Labels": {
+      "main": [
+        [
+          {
+            "node": "Log Label Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Label Event": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "WBqj1UKzZORCANPo"
+  },
+  "versionId": "240da754-ccc8-4bce-8a2e-5e3c00450beb",
+  "meta": {
+    "instanceId": "fb9317012284aa1a397c69541492ceb6ec5692041aefd8a1573dcad18efc2be7"
+  },
+  "id": "QBZhzIYU7qBuE6p5",
+  "tags": []
+}

@@ -1,0 +1,36 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs / reports generated locally
+logs/
+*.log
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Node/Python artifacts
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Backups with possible sensitive data
+n8n/backups/*.json
+n8n/exports/*.json
+!n8n/workflows/*.json
+
+# Raw API discovery dumps (may contain masked tokens / IDs)
+scripts/reports/raw/
+
+# Local-only variants of reports (with sensitive context)
+reports/*.local.md
+
+# Claude session state
+.remember/
+.claude/

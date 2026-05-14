@@ -1,0 +1,291 @@
+{
+  "name": "04-Chatwoot-Message-Logger",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot/messages",
+        "options": {}
+      },
+      "id": "webhook-chatwoot",
+      "name": "Chatwoot Events",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        272
+      ],
+      "webhookId": "chatwoot-messages-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.event || $json.body.type || $json.event || $json.type || '' }}",
+              "rightValue": "message_created",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-message-created",
+      "name": "Is message_created?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        272,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "normalized-phone",
+              "name": "phone",
+              "value": "={{ ($json.body.conversation?.contact?.phone_number || $json.body.conversation_meta?.sender?.phone_number || $json.body.sender?.phone_number || '').replace(/[^\\d]/g, '') }}",
+              "type": "string"
+            },
+            {
+              "id": "normalized-conversation",
+              "name": "chatwoot_conversation_id",
+              "value": "={{ ($json.body.conversation?.id || $json.body.conversation_id || '').toString() }}",
+              "type": "string"
+            },
+            {
+              "id": "normalized-direction",
+              "name": "direction",
+              "value": "={{ $json.body.message_type === 'incoming' ? 'inbound' : 'outbound' }}",
+              "type": "string"
+            },
+            {
+              "id": "normalized-role",
+              "name": "role",
+              "value": "={{ $json.body.message_type === 'incoming' ? 'user' : ($json.body.sender?.type === 'user' ? 'vendor' : 'assistant') }}",
+              "type": "string"
+            },
+            {
+              "id": "normalized-sender",
+              "name": "sender_id",
+              "value": "={{ ($json.body.sender_id || $json.body.sender?.id || '').toString() }}",
+              "type": "string"
+            },
+            {
+              "id": "normalized-content",
+              "name": "content",
+              "value": "={{ ($json.body.content || '').toString() }}",
+              "type": "string"
+            },
+            {
+              "id": "normalized-created-at",
+              "name": "created_at",
+              "value": "={{ $json.body.created_at || $json.body.timestamp || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "normalized-sender-name",
+              "name": "sender_name",
+              "value": "={{ ($json.body.sender?.name || $json.body.conversation_meta?.sender?.name || '').toString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "normalize-message",
+      "name": "Normalize Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        544,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  l.id as lead_id,\n  l.qualified_at,\n  asn.assignee_id,\n  a.name as agent_name,\n  a.team_id,\n  conv.id as conversation_id\nFROM contacts c\nJOIN leads l ON l.contact_id = c.id\nJOIN assignments asn ON asn.lead_id = l.id\nJOIN agents a ON a.id = asn.assignee_id\nLEFT JOIN conversations conv ON conv.chatwoot_conversation_id = NULLIF($1, '')::BIGINT\nWHERE c.phone = $2\n  AND l.qualified_at IS NOT NULL\nORDER BY l.qualified_at DESC\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.chatwoot_conversation_id || '', $json.phone || ''] }}"
+        }
+      },
+      "id": "check-lead-qualified",
+      "name": "Check Lead Qualified",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        800,
+        256
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-qualified",
+              "leftValue": "={{ $json.lead_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-qualified",
+      "name": "Is Qualified?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1072,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO messages (\n  phone,\n  conversation_id,\n  inbox,\n  role,\n  direction,\n  sender_id,\n  content,\n  created_at\n)\nVALUES (\n  $1,\n  NULLIF($2, '')::UUID,\n  'VENDEDOR',\n  $3,\n  $4,\n  NULLIF($5, '')::BIGINT,\n  $6,\n  CASE\n    WHEN NULLIF($7, '') IS NULL THEN NOW()\n    WHEN $7 ~ '^[0-9]+$' THEN to_timestamp(($7)::double precision)\n    ELSE $7::timestamptz\n  END\n)\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [$node['Normalize Message'].json.phone || '', $json.conversation_id || '', $node['Normalize Message'].json.role || '', $node['Normalize Message'].json.direction || '', $node['Normalize Message'].json.sender_id || '', $node['Normalize Message'].json.content || '', $node['Normalize Message'].json.created_at || ''] }}"
+        }
+      },
+      "id": "save-vendor-message",
+      "name": "Save Vendor Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1360,
+        176
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "no-op",
+      "name": "No Operation",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        384
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chatwoot Events": {
+      "main": [
+        [
+          {
+            "node": "Is message_created?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is message_created?": {
+      "main": [
+        [
+          {
+            "node": "Normalize Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Message": {
+      "main": [
+        [
+          {
+            "node": "Check Lead Qualified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Lead Qualified": {
+      "main": [
+        [
+          {
+            "node": "Is Qualified?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Qualified?": {
+      "main": [
+        [
+          {
+            "node": "Save Vendor Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Vendor Message": {
+      "main": []
+    },
+    "No Operation": {
+      "main": []
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "WBqj1UKzZORCANPo"
+  },
+  "versionId": "b8e7d60b-f98a-468c-b521-81337df30486",
+  "meta": {
+    "instanceId": "fb9317012284aa1a397c69541492ceb6ec5692041aefd8a1573dcad18efc2be7"
+  },
+  "id": "MlscoOb4IqmMpgQr",
+  "tags": []
+}

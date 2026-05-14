@@ -1,0 +1,425 @@
+{
+  "name": "08-Health-Check",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 50
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        80
+      ],
+      "id": "wf08-schedule-trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://api.agenciaprospect.space/instance/fetchInstances",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "nyKMjqn18RU3KxNGBcC0wBYNwWpZ0yzM"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Ping Evolution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        80
+      ],
+      "id": "wf08-ping-evolution",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://chat.agenciaprospect.space/api/v1/accounts/1/contacts/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "healthcheck"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "U1DuRjHXeeuaaiBdG1hTkuR6"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "name": "Ping Chatwoot API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        80
+      ],
+      "id": "wf08-ping-chatwoot-api",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://flow.agenciaprospect.space/api/v1/executions",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "workflowId",
+              "value": "7LvmLJIL7CdbWpbt"
+            },
+            {
+              "name": "limit",
+              "value": "25"
+            },
+            {
+              "name": "includeData",
+              "value": "true"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-API-KEY",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2YmE1NTRiZi1iZTMxLTQ0YTUtYTI0Ny1jMzc4MjFhNTc0MzQiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzY1MzkwMjExfQ.IOAlUfZIFlKSlZSE-8L0qYQa3e9_85J21BxMytmFnRE"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "WF06 Executions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        80
+      ],
+      "id": "wf08-wf06-executions",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://flow.agenciaprospect.space/api/v1/executions",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "workflowId",
+              "value": "hGsfyVT8TPWau6RH"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            },
+            {
+              "name": "includeData",
+              "value": "true"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-API-KEY",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2YmE1NTRiZi1iZTMxLTQ0YTUtYTI0Ny1jMzc4MjFhNTc0MzQiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzY1MzkwMjExfQ.IOAlUfZIFlKSlZSE-8L0qYQa3e9_85J21BxMytmFnRE"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "WF07 Executions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        80
+      ],
+      "id": "wf08-wf07-executions",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS leads_last_24h,\n  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours' AND status = 'contacted')::int AS contacted_last_24h,\n  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours' AND status = 'pending')::int AS pending_last_24h,\n  COUNT(*) FILTER (\n    WHERE status = 'pending'\n      AND created_at <= NOW() - INTERVAL '10 minutes'\n      AND COALESCE(facebook_lead_id, '') !~ '^TEST_'\n  )::int AS stale_pending_count,\n  COUNT(*) FILTER (\n    WHERE path IN (2, 3)\n      AND status IN ('pending', 'contacted')\n      AND first_message_sent_at IS NULL\n      AND created_at <= NOW() - INTERVAL '10 minutes'\n      AND COALESCE(facebook_lead_id, '') !~ '^TEST_'\n  )::int AS stale_missing_first_message_count,\n  MAX(created_at) AS last_fb_lead_at,\n  COALESCE((\n    SELECT json_agg(row_to_json(t)) FROM (\n      SELECT facebook_lead_id, status, path, agent_type, created_at, updated_at\n      FROM fb_leads\n      WHERE status = 'pending'\n        AND created_at <= NOW() - INTERVAL '10 minutes'\n        AND COALESCE(facebook_lead_id, '') !~ '^TEST_'\n      ORDER BY created_at ASC\n      LIMIT 10\n    ) t\n  ), '[]'::json) AS stale_pending_leads,\n  COALESCE((\n    SELECT json_agg(row_to_json(t)) FROM (\n      SELECT facebook_lead_id, status, path, agent_type, created_at, updated_at\n      FROM fb_leads\n      WHERE path IN (2, 3)\n        AND status IN ('pending', 'contacted')\n        AND first_message_sent_at IS NULL\n        AND created_at <= NOW() - INTERVAL '10 minutes'\n        AND COALESCE(facebook_lead_id, '') !~ '^TEST_'\n      ORDER BY created_at ASC\n      LIMIT 10\n    ) t\n  ), '[]'::json) AS stale_missing_first_message_leads\nFROM fb_leads;",
+        "options": {}
+      },
+      "name": "Lead Health Snapshot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1120,
+        80
+      ],
+      "id": "wf08-lead-health",
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH active_fb AS (\n  SELECT\n    id,\n    facebook_lead_id,\n    path,\n    agent_type,\n    nome,\n    telefone,\n    first_message_sent_at,\n    created_at,\n    CASE WHEN LENGTH(telefone) = 13 THEN LEFT(telefone, 4) || SUBSTRING(telefone, 6) ELSE telefone END AS phone12\n  FROM fb_leads\n  WHERE path IN (2, 3)\n    AND first_message_sent_at IS NOT NULL\n    AND COALESCE(facebook_lead_id, '') !~ '^TEST_'\n),\nopen_fb AS (\n  SELECT af.*\n  FROM active_fb af\n  LEFT JOIN leads l ON l.fb_lead_id = af.id\n  WHERE l.id IS NULL\n),\nuser_after_first AS (\n  SELECT ofb.id AS fb_lead_id, MAX(m.created_at) AS last_user_at\n  FROM open_fb ofb\n  JOIN ia_messages m\n    ON (CASE WHEN LENGTH(m.phone) = 13 THEN LEFT(m.phone, 4) || SUBSTRING(m.phone, 6) ELSE m.phone END) = ofb.phone12\n   AND m.direction = 'user'\n   AND m.created_at > ofb.first_message_sent_at\n  GROUP BY ofb.id\n),\nassistant_after_last_user AS (\n  SELECT ofb.id AS fb_lead_id, MAX(m.created_at) AS assistant_after_last_user_at\n  FROM open_fb ofb\n  JOIN user_after_first uf ON uf.fb_lead_id = ofb.id\n  LEFT JOIN ia_messages m\n    ON (CASE WHEN LENGTH(m.phone) = 13 THEN LEFT(m.phone, 4) || SUBSTRING(m.phone, 6) ELSE m.phone END) = ofb.phone12\n   AND m.direction = 'assistant'\n   AND m.created_at > uf.last_user_at\n  GROUP BY ofb.id\n),\nthread_state AS (\n  SELECT ofb.id AS fb_lead_id, ofb.facebook_lead_id, ofb.path, ofb.agent_type, ofb.nome, ofb.telefone,\n         ofb.first_message_sent_at, ofb.created_at,\n         uf.last_user_at, aa.assistant_after_last_user_at,\n         EXTRACT(EPOCH FROM (NOW() - uf.last_user_at)) / 60 AS minutes_waiting\n  FROM open_fb ofb\n  LEFT JOIN user_after_first uf ON uf.fb_lead_id = ofb.id\n  LEFT JOIN assistant_after_last_user aa ON aa.fb_lead_id = ofb.id\n)\nSELECT\n  COUNT(*) FILTER (WHERE last_user_at >= NOW() - INTERVAL '24 hours')::int AS user_messages_last_24h,\n  COUNT(*) FILTER (WHERE assistant_after_last_user_at >= NOW() - INTERVAL '24 hours')::int AS assistant_messages_last_24h,\n  MAX(last_user_at) AS last_user_message_at,\n  MAX(assistant_after_last_user_at) AS last_assistant_message_at,\n  COUNT(*) FILTER (\n    WHERE last_user_at IS NOT NULL\n      AND assistant_after_last_user_at IS NULL\n      AND last_user_at <= NOW() - INTERVAL '10 minutes'\n      AND last_user_at > NOW() - INTERVAL '60 minutes'\n  )::int AS overdue_reply_count,\n  COUNT(*) FILTER (\n    WHERE last_user_at IS NOT NULL\n      AND assistant_after_last_user_at IS NULL\n      AND last_user_at <= NOW() - INTERVAL '60 minutes'\n  )::int AS stale_unreplied_count,\n  COALESCE((\n    SELECT json_agg(row_to_json(x)) FROM (\n      SELECT facebook_lead_id, nome, telefone, path, agent_type, first_message_sent_at, last_user_at, minutes_waiting\n      FROM thread_state\n      WHERE last_user_at IS NOT NULL\n        AND assistant_after_last_user_at IS NULL\n      ORDER BY last_user_at DESC\n      LIMIT 10\n    ) x\n  ), '[]'::json) AS unreplied_threads\nFROM thread_state;",
+        "options": {}
+      },
+      "name": "Message Health Snapshot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1344,
+        80
+      ],
+      "id": "wf08-message-health",
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  MAX(created_at) FILTER (WHERE type = 'workflow_success' AND payload->>'workflow' = 'WF06') AS last_wf06_success_at,\n  MAX(created_at) FILTER (WHERE type = 'workflow_success' AND payload->>'workflow' = 'WF07') AS last_wf07_success_at,\n  COUNT(*) FILTER (WHERE type = 'workflow_success' AND payload->>'workflow' = 'WF06' AND created_at >= NOW() - INTERVAL '24 hours')::int AS wf06_success_last_24h,\n  COUNT(*) FILTER (WHERE type = 'workflow_success' AND payload->>'workflow' = 'WF07' AND created_at >= NOW() - INTERVAL '24 hours')::int AS wf07_success_last_24h,\n  COUNT(*) FILTER (WHERE type = 'infra_error' AND created_at >= NOW() - INTERVAL '24 hours')::int AS infra_errors_last_24h,\n  MAX(created_at) FILTER (WHERE type = 'infra_error') AS last_infra_error_at,\n  COALESCE((\n    SELECT json_agg(row_to_json(t)) FROM (\n      SELECT created_at, payload->>'workflow_name' AS workflow_name, payload->>'last_node' AS last_node, payload->>'error_message' AS error_message\n      FROM events\n      WHERE type = 'infra_error'\n      ORDER BY created_at DESC\n      LIMIT 5\n    ) t\n  ), '[]'::json) AS recent_infra_errors\nFROM events;",
+        "options": {}
+      },
+      "name": "Workflow Signal Snapshot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1568,
+        80
+      ],
+      "id": "wf08-workflow-signal",
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function firstJson(name) {\n  try { return $(name).first().json; } catch (error) { return { error: { message: error.message } }; }\n}\nfunction allJson(name) {\n  try { return $(name).all().map((item) => item.json); } catch (error) { return [{ error: { message: error.message } }]; }\n}\nfunction hasNodeError(payload) {\n  return !!(payload && (payload.error || payload.code === 'ERR_NON_2XX_STATUS_CODE'));\n}\nfunction minutesSince(value) {\n  if (!value) return null;\n  const ts = new Date(value).getTime();\n  if (Number.isNaN(ts)) return null;\n  return Math.round((Date.now() - ts) / 60000);\n}\nfunction slimExecution(execution) {\n  if (!execution) return null;\n  return {\n    id: execution.id || null,\n    status: execution.status || null,\n    mode: execution.mode || null,\n    finished: execution.finished ?? null,\n    startedAt: execution.startedAt || null,\n    stoppedAt: execution.stoppedAt || null,\n    last_node: execution?.data?.resultData?.lastNodeExecuted || null,\n  };\n}\nfunction getNodeJson(execution, nodeName) {\n  try {\n    return execution.data.resultData.runData[nodeName][0].data.main[0][0].json;\n  } catch (error) {\n    return null;\n  }\n}\nconst now = Date.now();\nconst dayAgo = now - (24 * 60 * 60 * 1000);\nconst evolutionItems = allJson('Ping Evolution');\nconst evolutionError = evolutionItems.find((item) => hasNodeError(item));\nconst evolutionInstance = evolutionItems.find((item) => item.name === 'ASX_SDR') || evolutionItems[0] || null;\nconst evolutionUp = !evolutionError && evolutionInstance?.connectionStatus === 'open';\nconst chatwoot = firstJson('Ping Chatwoot API');\nconst chatwootUp = !hasNodeError(chatwoot) && !!chatwoot.meta && Array.isArray(chatwoot.payload);\nconst wf06ExecPayload = firstJson('WF06 Executions');\nconst wf07ExecPayload = firstJson('WF07 Executions');\nconst wf06Executions = Array.isArray(wf06ExecPayload.data) ? wf06ExecPayload.data : [];\nconst wf07Executions = Array.isArray(wf07ExecPayload.data) ? wf07ExecPayload.data : [];\nconst wf06Last = slimExecution(wf06Executions[0] || null);\nconst wf07Last = slimExecution(wf07Executions[0] || null);\nconst leadHealth = firstJson('Lead Health Snapshot');\nconst messageHealth = firstJson('Message Health Snapshot');\nconst workflowSignals = firstJson('Workflow Signal Snapshot');\nconst handoffHealth = firstJson('Handoff Health Snapshot');\nconst stalePending = Number(leadHealth.stale_pending_count || 0);\nconst staleMissingFirstMessage = Number(leadHealth.stale_missing_first_message_count || 0);\nconst infraErrors = Number(workflowSignals.infra_errors_last_24h || 0);\nconst overdueReplies = Number(messageHealth.overdue_reply_count || 0);\nconst staleUnreplied = Number(messageHealth.stale_unreplied_count || 0);\nconst repliedWithoutHandoff = Number(handoffHealth.replied_without_handoff_count || 0);\nconst repliedWithoutAssistant = Number(handoffHealth.replied_without_assistant_count || 0);\nconst leadWithoutAssignment = Number(handoffHealth.lead_without_assignment_count || 0);\nconst assignmentWithoutHandoffEvent = Number(handoffHealth.assignment_without_handoff_event_count || 0);\nconst path3RepliedLast24h = Number(handoffHealth.path3_replied_last_24h || 0);\nconst handoffsLast24h = Number(handoffHealth.handoffs_last_24h || 0);\nconst awaitingUserReplyCount = Number(handoffHealth.awaiting_user_reply_count || 0);\nconst wf07Recent = wf07Executions.filter((execution) => {\n  const startedAt = execution?.startedAt ? new Date(execution.startedAt).getTime() : null;\n  return startedAt && startedAt >= dayAgo;\n});\nconst routeCounters = {\n  distributor_agent: 0,\n  qualified_agent: 0,\n  already_qualified: 0,\n  unknown: 0,\n};\nconst recentUnknownRoutes = [];\nfor (const execution of wf07Recent) {\n  const lookup = getNodeJson(execution, 'Lookup Lead Path');\n  const leadType = lookup?.lead_type || 'unknown';\n  if (Object.prototype.hasOwnProperty.call(routeCounters, leadType)) {\n    routeCounters[leadType] += 1;\n  } else {\n    routeCounters.unknown += 1;\n  }\n  if (leadType === 'unknown' || execution?.data?.resultData?.lastNodeExecuted === 'Auto Reply Unknown') {\n    recentUnknownRoutes.push({\n      execution_id: execution.id || null,\n      started_at: execution.startedAt || null,\n      stopped_at: execution.stoppedAt || null,\n      phone: getNodeJson(execution, 'Merge Messages')?.phone || getNodeJson(execution, 'Extrair Campos')?.phone || null,\n      last_node: execution?.data?.resultData?.lastNodeExecuted || null,\n      lead_type: leadType,\n      message_preview: getNodeJson(execution, 'Merge Messages')?.txt || getNodeJson(execution, 'Extrair Campos')?.conversation || null,\n    });\n  }\n}\nconst routingHealth = {\n  distributor_routes_last_24h: routeCounters.distributor_agent,\n  qualified_routes_last_24h: routeCounters.qualified_agent,\n  already_qualified_routes_last_24h: routeCounters.already_qualified,\n  unknown_routes_last_24h: routeCounters.unknown,\n  recent_unknown_routes: recentUnknownRoutes.slice(0, 10),\n};\nconst criticalIssues = [];\nconst warnings = [];\nif (!evolutionUp) criticalIssues.push('evolution_instance_not_open');\nif (!chatwootUp) criticalIssues.push('chatwoot_api_auth_check_failed');\nif (hasNodeError(wf06ExecPayload)) criticalIssues.push('wf06_execution_api_unreachable');\nif (hasNodeError(wf07ExecPayload)) criticalIssues.push('wf07_execution_api_unreachable');\nif (wf06Last && wf06Last.status && wf06Last.status !== 'success') criticalIssues.push('wf06_last_execution_failed');\nif (wf07Last && wf07Last.status && wf07Last.status !== 'success') criticalIssues.push('wf07_last_execution_failed');\nif (stalePending > 0) criticalIssues.push('fb_leads_stale_pending');\nif (staleMissingFirstMessage > 0) criticalIssues.push('fb_leads_missing_first_message');\nif (repliedWithoutHandoff > 0) criticalIssues.push('path3_replied_without_handoff');\nif (leadWithoutAssignment > 0) criticalIssues.push('lead_created_without_assignment');\nif (assignmentWithoutHandoffEvent > 0) criticalIssues.push('assignment_without_handoff_event');\nif (infraErrors > 0) warnings.push('infra_errors_last_24h');\nif (overdueReplies > 0) warnings.push('tracked_threads_overdue_reply');\nif (staleUnreplied > 0) warnings.push('tracked_threads_stale_unreplied');\nif (repliedWithoutAssistant > 0) warnings.push('path3_replied_without_assistant');\nif (routingHealth.unknown_routes_last_24h > 0) warnings.push('wf07_unknown_routes_last_24h');\nif (path3RepliedLast24h > 0 && handoffsLast24h === 0) warnings.push('path3_replied_without_same_day_handoff');\nif (wf07Last && minutesSince(wf07Last.startedAt) > 1440) warnings.push('wf07_idle_over_24h');\nif (Number(workflowSignals.wf07_success_last_24h || 0) === 0 && Number(messageHealth.user_messages_last_24h || 0) > 0) {\n  warnings.push('wf07_no_business_success_events');\n}\nconst handoffStatus = (repliedWithoutHandoff > 0 || leadWithoutAssignment > 0 || assignmentWithoutHandoffEvent > 0)\n  ? 'down'\n  : ((path3RepliedLast24h > 0 && handoffsLast24h === 0) ? 'warn' : 'up');\nconst routingStatus = routingHealth.unknown_routes_last_24h > 0 ? 'warn' : 'up';\nconst messageStatus = staleUnreplied > 0 ? 'down' : (overdueReplies > 0 ? 'warn' : 'up');\nconst workflowSignalsStatus = (infraErrors > 0 || (Number(workflowSignals.wf07_success_last_24h || 0) === 0 && Number(messageHealth.user_messages_last_24h || 0) > 0))\n  ? 'warn'\n  : 'up';\nconst checks = [\n  {\n    service: 'evolution_api',\n    status: evolutionUp ? 'up' : 'down',\n    details: {\n      instance_name: evolutionInstance?.name || null,\n      connection_status: evolutionInstance?.connectionStatus || null,\n      updated_at: evolutionInstance?.updatedAt || null,\n    },\n    error: evolutionError?.error?.message || null,\n  },\n  {\n    service: 'chatwoot_api',\n    status: chatwootUp ? 'up' : 'down',\n    details: { count: chatwoot?.meta?.count ?? null },\n    error: chatwoot?.error?.message || null,\n  },\n  {\n    service: 'wf06_execution',\n    status: !wf06Last ? 'warn' : (wf06Last.status === 'success' ? 'up' : 'down'),\n    details: wf06Last,\n    error: wf06ExecPayload?.error?.message || null,\n  },\n  {\n    service: 'wf07_execution',\n    status: !wf07Last ? 'warn' : (wf07Last.status === 'success' ? (minutesSince(wf07Last.startedAt) > 1440 ? 'idle' : 'up') : 'down'),\n    details: wf07Last,\n    error: wf07ExecPayload?.error?.message || null,\n  },\n  {\n    service: 'lead_pipeline',\n    status: stalePending === 0 && staleMissingFirstMessage === 0 ? 'up' : 'down',\n    details: {\n      leads_last_24h: Number(leadHealth.leads_last_24h || 0),\n      contacted_last_24h: Number(leadHealth.contacted_last_24h || 0),\n      pending_last_24h: Number(leadHealth.pending_last_24h || 0),\n      stale_pending_count: stalePending,\n      stale_missing_first_message_count: staleMissingFirstMessage,\n      last_fb_lead_at: leadHealth.last_fb_lead_at || null,\n    },\n    error: leadHealth?.error?.message || null,\n  },\n  {\n    service: 'handoff_health',\n    status: handoffStatus,\n    details: {\n      path3_last_24h: Number(handoffHealth.path3_last_24h || 0),\n      path3_contacted_last_24h: Number(handoffHealth.path3_contacted_last_24h || 0),\n      awaiting_user_reply_count: awaitingUserReplyCount,\n      path3_replied_last_24h: path3RepliedLast24h,\n      handoffs_last_24h: handoffsLast24h,\n      leads_created_last_24h: Number(handoffHealth.leads_created_last_24h || 0),\n      assignments_last_24h: Number(handoffHealth.assignments_last_24h || 0),\n      replied_without_handoff_count: repliedWithoutHandoff,\n      replied_without_assistant_count: repliedWithoutAssistant,\n      lead_without_assignment_count: leadWithoutAssignment,\n      assignment_without_handoff_event_count: assignmentWithoutHandoffEvent,\n      last_handoff_at: handoffHealth.last_handoff_at || null,\n      last_path3_reply_at: handoffHealth.last_path3_reply_at || null,\n    },\n    error: handoffHealth?.error?.message || null,\n  },\n  {\n    service: 'routing_health',\n    status: routingStatus,\n    details: {\n      distributor_routes_last_24h: routingHealth.distributor_routes_last_24h,\n      qualified_routes_last_24h: routingHealth.qualified_routes_last_24h,\n      already_qualified_routes_last_24h: routingHealth.already_qualified_routes_last_24h,\n      unknown_routes_last_24h: routingHealth.unknown_routes_last_24h,\n    },\n    error: null,\n  },\n  {\n    service: 'workflow_signals',\n    status: workflowSignalsStatus,\n    details: {\n      last_wf06_success_at: workflowSignals.last_wf06_success_at || null,\n      last_wf07_success_at: workflowSignals.last_wf07_success_at || null,\n      wf06_success_last_24h: Number(workflowSignals.wf06_success_last_24h || 0),\n      wf07_success_last_24h: Number(workflowSignals.wf07_success_last_24h || 0),\n      infra_errors_last_24h: infraErrors,\n      last_infra_error_at: workflowSignals.last_infra_error_at || null,\n    },\n    error: workflowSignals?.error?.message || null,\n  },\n  {\n    service: 'message_health',\n    status: messageStatus,\n    details: {\n      user_messages_last_24h: Number(messageHealth.user_messages_last_24h || 0),\n      assistant_messages_last_24h: Number(messageHealth.assistant_messages_last_24h || 0),\n      overdue_reply_count: overdueReplies,\n      stale_unreplied_count: staleUnreplied,\n      last_user_message_at: messageHealth.last_user_message_at || null,\n      last_assistant_message_at: messageHealth.last_assistant_message_at || null,\n    },\n    error: messageHealth?.error?.message || null,\n  },\n];\nconst overall_status = criticalIssues.length ? 'down' : (warnings.length ? 'warn' : 'up');\nreturn [{\n  json: {\n    checked_at: new Date().toISOString(),\n    overall_status,\n    all_up: overall_status === 'up',\n    critical_issues: criticalIssues,\n    warnings,\n    checks,\n    lead_health: leadHealth,\n    handoff_health: handoffHealth,\n    routing_health: routingHealth,\n    message_health: messageHealth,\n    workflow_signals: workflowSignals,\n    n8n_executions: {\n      wf06_last_execution: wf06Last,\n      wf07_last_execution: wf07Last,\n    },\n  },\n}];"
+      },
+      "name": "Consolidate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        80
+      ],
+      "id": "wf08-consolidate-results"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO events (type, payload) VALUES ('health_check', $1::jsonb)",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "name": "Log Health",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2240,
+        80
+      ],
+      "id": "wf08-log-health",
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH path3 AS (\n  SELECT\n    id,\n    facebook_lead_id,\n    nome,\n    telefone,\n    status,\n    first_message_sent_at,\n    created_at,\n    updated_at,\n    CASE WHEN LENGTH(telefone) = 13 THEN LEFT(telefone, 4) || SUBSTRING(telefone, 6) ELSE telefone END AS phone12\n  FROM fb_leads\n  WHERE path = 3\n    AND created_at >= NOW() - INTERVAL '7 days'\n    AND COALESCE(facebook_lead_id, '') !~ '^TEST_'\n),\nuser_reply AS (\n  SELECT p.id AS fb_lead_id, MAX(m.created_at) AS last_user_reply_at\n  FROM path3 p\n  JOIN ia_messages m\n    ON (CASE WHEN LENGTH(m.phone) = 13 THEN LEFT(m.phone, 4) || SUBSTRING(m.phone, 6) ELSE m.phone END) = p.phone12\n   AND m.direction = 'user'\n   AND p.first_message_sent_at IS NOT NULL\n   AND m.created_at > p.first_message_sent_at\n  GROUP BY p.id\n),\nassistant_after_reply AS (\n  SELECT p.id AS fb_lead_id, MAX(m.created_at) AS last_assistant_after_reply_at\n  FROM path3 p\n  JOIN user_reply ur ON ur.fb_lead_id = p.id\n  LEFT JOIN ia_messages m\n    ON (CASE WHEN LENGTH(m.phone) = 13 THEN LEFT(m.phone, 4) || SUBSTRING(m.phone, 6) ELSE m.phone END) = p.phone12\n   AND m.direction = 'assistant'\n   AND m.created_at > ur.last_user_reply_at\n  GROUP BY p.id\n),\nlead_record AS (\n  SELECT p.id AS fb_lead_id, l.id AS lead_id, l.qualified_at\n  FROM path3 p\n  LEFT JOIN leads l ON l.fb_lead_id = p.id\n),\nassignment_record AS (\n  SELECT lr.fb_lead_id, MAX(a.assigned_at) AS assignment_at, MAX(a.id::text) AS assignment_id\n  FROM lead_record lr\n  LEFT JOIN assignments a ON a.lead_id = lr.lead_id\n  GROUP BY lr.fb_lead_id\n),\nhandoff_event AS (\n  SELECT p.id AS fb_lead_id, MAX(e.created_at) AS handoff_at\n  FROM path3 p\n  LEFT JOIN lead_record lr ON lr.fb_lead_id = p.id\n  LEFT JOIN events e\n    ON e.type = 'handoff_complete'\n   AND ((lr.lead_id IS NOT NULL AND e.payload->>'lead_id' = lr.lead_id::text)\n      OR (CASE WHEN LENGTH(COALESCE(e.payload->>'phone', '')) = 13 THEN LEFT(e.payload->>'phone', 4) || SUBSTRING(e.payload->>'phone', 6) ELSE COALESCE(e.payload->>'phone', '') END) = p.phone12)\n  GROUP BY p.id\n),\nbase AS (\n  SELECT p.*, ur.last_user_reply_at, aar.last_assistant_after_reply_at,\n         lr.lead_id, lr.qualified_at, ar.assignment_id, ar.assignment_at, he.handoff_at,\n         CASE\n           WHEN ur.last_user_reply_at IS NULL THEN NULL\n           WHEN lr.lead_id IS NULL AND ur.last_user_reply_at <= NOW() - INTERVAL '10 minutes' THEN 'sem_lead'\n           WHEN lr.lead_id IS NOT NULL AND ar.assignment_id IS NULL AND ur.last_user_reply_at <= NOW() - INTERVAL '10 minutes' THEN 'sem_assignment'\n           WHEN ar.assignment_id IS NOT NULL AND he.handoff_at IS NULL AND ur.last_user_reply_at <= NOW() - INTERVAL '10 minutes' THEN 'sem_evento_handoff'\n           WHEN aar.last_assistant_after_reply_at IS NULL AND ur.last_user_reply_at <= NOW() - INTERVAL '10 minutes' THEN 'sem_resposta_assistente'\n           ELSE NULL\n         END AS issue\n  FROM path3 p\n  LEFT JOIN user_reply ur ON ur.fb_lead_id = p.id\n  LEFT JOIN assistant_after_reply aar ON aar.fb_lead_id = p.id\n  LEFT JOIN lead_record lr ON lr.fb_lead_id = p.id\n  LEFT JOIN assignment_record ar ON ar.fb_lead_id = p.id\n  LEFT JOIN handoff_event he ON he.fb_lead_id = p.id\n)\nSELECT\n  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS path3_last_24h,\n  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours' AND first_message_sent_at IS NOT NULL)::int AS path3_contacted_last_24h,\n  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours' AND first_message_sent_at IS NOT NULL AND last_user_reply_at IS NULL)::int AS awaiting_user_reply_count,\n  COUNT(*) FILTER (WHERE last_user_reply_at >= NOW() - INTERVAL '24 hours')::int AS path3_replied_last_24h,\n  COUNT(*) FILTER (WHERE handoff_at >= NOW() - INTERVAL '24 hours')::int AS handoffs_last_24h,\n  COUNT(*) FILTER (WHERE lead_id IS NOT NULL AND qualified_at >= NOW() - INTERVAL '24 hours')::int AS leads_created_last_24h,\n  COUNT(*) FILTER (WHERE assignment_at >= NOW() - INTERVAL '24 hours')::int AS assignments_last_24h,\n  COUNT(*) FILTER (\n    WHERE last_user_reply_at IS NOT NULL\n      AND handoff_at IS NULL\n      AND last_user_reply_at <= NOW() - INTERVAL '10 minutes'\n  )::int AS replied_without_handoff_count,\n  COUNT(*) FILTER (\n    WHERE last_user_reply_at IS NOT NULL\n      AND last_assistant_after_reply_at IS NULL\n      AND last_user_reply_at <= NOW() - INTERVAL '10 minutes'\n  )::int AS replied_without_assistant_count,\n  COUNT(*) FILTER (\n    WHERE lead_id IS NOT NULL\n      AND assignment_id IS NULL\n      AND last_user_reply_at IS NOT NULL\n      AND last_user_reply_at <= NOW() - INTERVAL '10 minutes'\n  )::int AS lead_without_assignment_count,\n  COUNT(*) FILTER (\n    WHERE assignment_id IS NOT NULL\n      AND handoff_at IS NULL\n      AND last_user_reply_at IS NOT NULL\n      AND last_user_reply_at <= NOW() - INTERVAL '10 minutes'\n  )::int AS assignment_without_handoff_event_count,\n  MAX(handoff_at) AS last_handoff_at,\n  MAX(last_user_reply_at) AS last_path3_reply_at,\n  COALESCE((\n    SELECT json_agg(row_to_json(x)) FROM (\n      SELECT facebook_lead_id, nome, telefone, status, created_at, first_message_sent_at, last_user_reply_at,\n             last_assistant_after_reply_at, lead_id, assignment_id, handoff_at, issue\n      FROM base\n      WHERE issue IS NOT NULL\n      ORDER BY last_user_reply_at DESC NULLS LAST, created_at DESC\n      LIMIT 10\n    ) x\n  ), '[]'::json) AS stuck_path3_leads\nFROM base;",
+        "options": {}
+      },
+      "name": "Handoff Health Snapshot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1792,
+        80
+      ],
+      "id": "wf08-handoff-health",
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Ping Evolution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ping Evolution": {
+      "main": [
+        [
+          {
+            "node": "Ping Chatwoot API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ping Chatwoot API": {
+      "main": [
+        [
+          {
+            "node": "WF06 Executions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WF06 Executions": {
+      "main": [
+        [
+          {
+            "node": "WF07 Executions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WF07 Executions": {
+      "main": [
+        [
+          {
+            "node": "Lead Health Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Health Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Message Health Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message Health Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Workflow Signal Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow Signal Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Handoff Health Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidate Results": {
+      "main": [
+        [
+          {
+            "node": "Log Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handoff Health Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Consolidate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "c8391c20-1213-49d1-9790-aa1ab141861d",
+  "meta": {
+    "instanceId": "fb9317012284aa1a397c69541492ceb6ec5692041aefd8a1573dcad18efc2be7"
+  },
+  "id": "Oj8SgieQ4HH7Czbk",
+  "tags": []
+}

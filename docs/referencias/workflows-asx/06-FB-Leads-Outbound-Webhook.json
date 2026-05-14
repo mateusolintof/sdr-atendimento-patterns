@@ -1,0 +1,1441 @@
+{
+  "name": "06-FB-Leads-Outbound-Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "\nconst webhook = $('Webhook1').first().json;\nconst leadData = $json;\n\nif (leadData.facebook_lead_id) {\n  return [{ json: leadData }];\n}\n\nif (leadData.error) {\n  throw new Error('Meta Graph API error: ' + (leadData.error.message || JSON.stringify(leadData.error)));\n}\n\nconst normalize = (value = '') => String(value)\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .toLowerCase()\n  .trim();\n\nconst firstValue = (item) => Array.isArray(item?.values) ? (item.values[0] || '') : (item?.values || '');\nconst fieldData = Array.isArray(leadData.field_data) ? leadData.field_data : [];\n\nif (!fieldData.length) {\n  throw new Error('Lead payload without field_data');\n}\n\nconst normalizedFields = fieldData.map((item) => ({\n  key: normalize(item.name).replace(/[^a-z0-9]+/g, ' ').trim(),\n  value: String(firstValue(item) || '').trim(),\n}));\n\nconst findField = (...patterns) => {\n  const normalizedPatterns = patterns.map((pattern) => normalize(pattern).replace(/[^a-z0-9]+/g, ' ').trim());\n  const match = normalizedFields.find((field) => normalizedPatterns.some((pattern) => field.key.includes(pattern)));\n  return match?.value || '';\n};\n\nconst titleCase = (value = '') => String(value)\n  .toLowerCase()\n  .replace(/_/g, ' ')\n  .replace(/\\s+/g, ' ')\n  .trim()\n  .split(' ')\n  .filter(Boolean)\n  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))\n  .join(' ');\n\nconst normalizeProfile = (value = '') => {\n  const key = normalize(value).replace(/[^a-z0-9]+/g, ' ').trim();\n  const profileMap = {\n    distribuidora: 'Distribuidora',\n    representante: 'Representante',\n    lojista: 'Lojista',\n    oficina: 'Oficina',\n    revenda: 'Revenda',\n    autopecas: 'Autopecas',\n    'auto pecas': 'Autopecas',\n  };\n  return profileMap[key] || titleCase(value);\n};\n\nconst normalizeVolume = (value = '') => {\n  const key = normalize(value).replace(/[^a-z0-9]+/g, '');\n  if (key.includes('abaixode2000')) return 'Abaixo de 2.000';\n  if (key.includes('entre2000e4000')) return 'Entre 2.000 e 4.000';\n  if (key.includes('entre4000e10000')) return 'Entre 4.000 e 10.000';\n  if (key.includes('acimade10000')) return 'Acima de 10.000';\n  return titleCase(value);\n};\n\nconst telefone = findField('telefone', 'celular', 'whatsapp');\nconst nome = findField('nome');\nconst email = findField('email');\nconst perfil = normalizeProfile(findField('perfil', 'negocio'));\nconst volumeFaixa = normalizeVolume(findField('estimativa media de compra mensal', 'compra mensal', 'volume'));\nconst cnpjRaw = findField('cnpj');\nconst estadoEnvio = findField('estado', 'envio');\n\nconst change = webhook.body?.entry?.[0]?.changes?.[0]?.value || {};\n\nreturn [{\n  json: {\n    facebook_lead_id: leadData.id || change.leadgen_id || '',\n    form_id: change.form_id || '',\n    page_id: change.page_id || webhook.body?.entry?.[0]?.id || '',\n    nome,\n    email,\n    telefone_raw: telefone,\n    perfil,\n    volume_faixa: volumeFaixa,\n    cnpj_raw: cnpjRaw,\n    estado_envio: estadoEnvio,\n  }\n}];\n"
+      },
+      "id": "f464a51c-008e-41d0-905a-706d5db901a5",
+      "name": "Extract Form Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst rawPhone = $json.telefone_raw || '';\nlet phone = rawPhone.replace(/\\D/g, '');\n\nif (phone.length === 13 && phone.startsWith('55')) {\n  // OK: 55 + DDD(2) + num(9)\n} else if (phone.length === 12 && phone.startsWith('55')) {\n  // Missing 9: 55+DDD+8dig\n  phone = phone.slice(0, 4) + '9' + phone.slice(4);\n} else if (phone.length === 11 && phone.startsWith('0')) {\n  // 0+DDD+9+num\n  phone = '55' + phone.slice(1);\n} else if (phone.length === 11) {\n  // DDD+9+num\n  phone = '55' + phone;\n} else if (phone.length === 10) {\n  // DDD+num (missing 9)\n  phone = '55' + phone.slice(0, 2) + '9' + phone.slice(2);\n} else if (phone.length === 12 && phone.startsWith('0')) {\n  // 0+DDD+9+num (extra 0)\n  phone = '55' + phone.slice(1);\n} else {\n  phone = 'INVALID_' + rawPhone;\n}\n\nreturn [{\n  json: {\n    ...$json,\n    telefone: phone,\n    phone_valid: !phone.startsWith('INVALID')\n  }\n}];\n"
+      },
+      "id": "3f1bede2-cc66-43cb-bf10-c8057ba303d9",
+      "name": "Normalize Phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e1380212-4637-4e11-996e-4b31fce42324",
+              "leftValue": "={{ $json.phone_valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e88935e7-8eeb-4550-af96-6df0c6b1ed70",
+      "name": "Phone Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        848,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO events (type, payload) VALUES ('invalid_phone', $1::jsonb)",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ facebook_lead_id: $json.facebook_lead_id, phone_raw: $json.telefone_raw }) }}"
+        }
+      },
+      "id": "14a07544-2508-4344-b505-9810d318d0db",
+      "name": "Log Invalid Phone",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        896,
+        608
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cnpjRaw = $json.cnpj_raw || '';\nconst cnpj = cnpjRaw.replace(/\\D/g, '');\nreturn [{\n  json: {\n    ...$json,\n    cnpj: cnpj,\n    cnpj_length: cnpj.length\n  }\n}];\n"
+      },
+      "id": "1c910ae7-acd1-4637-8627-4dcb71d4c971",
+      "name": "Clean CNPJ",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6225364c-9fd6-42f5-a20e-7be3f7809c33",
+              "leftValue": "={{ $json.cnpj_length }}",
+              "rightValue": 14,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cc887d5f-7a28-4e6e-b932-01fb3a182b1a",
+      "name": "CNPJ 14 Digits?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1360,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO fb_leads (\n  facebook_lead_id, form_id, page_id, nome, email,\n  telefone_raw, telefone, perfil, volume_faixa,\n  cnpj_raw, estado_envio, path, path_reason, status\n) VALUES (\n  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,\n  1, 'CNPJ formato invalido (nao tem 14 digitos)', 'disqualified_cnpj'\n) ON CONFLICT (facebook_lead_id) DO NOTHING",
+        "options": {
+          "queryReplacement": "={{ [$json.facebook_lead_id, $json.form_id, $json.page_id, $json.nome, $json.email, $json.telefone_raw, $json.telefone, $json.perfil, $json.volume_faixa, $json.cnpj_raw, $json.estado_envio] }}"
+        }
+      },
+      "id": "eeb5899b-8d71-4464-9971-d2b3edd8f59e",
+      "name": "Save Disqualified Format",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1360,
+        624
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6a0578f0-1132-4e10-9147-dc2bf040757a",
+              "name": "cnpj",
+              "value": "={{ $json.cnpj }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e591c39a-6f67-4c9c-87ba-8fe342cfe164",
+      "name": "Prepare Enrich",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1680,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "fRc8nB8qUjJUrTHw",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "7893b974-6e58-492c-b9d5-598e0a2bc83c",
+      "name": "02A Company Enrich",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1952,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "2811460a-fee5-4f5f-b6c5-745ff5f8c52d",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "id": "87824b7f-47cc-4af2-9152-5d875fbb9c94",
+      "name": "CNPJ Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO fb_leads (\n  facebook_lead_id, form_id, page_id, nome, email,\n  telefone_raw, telefone, perfil, volume_faixa,\n  cnpj_raw, cnpj, estado_envio, cnpj_valido,\n  path, path_reason, status\n) VALUES (\n  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,\n  false, 1, 'CNPJ invalido na Receita Federal', 'disqualified_cnpj'\n) ON CONFLICT (facebook_lead_id) DO NOTHING",
+        "options": {
+          "queryReplacement": "={{ [$('Extract Form Fields').first().json.facebook_lead_id, $('Extract Form Fields').first().json.form_id, $('Extract Form Fields').first().json.page_id, $('Extract Form Fields').first().json.nome, $('Extract Form Fields').first().json.email, $('Extract Form Fields').first().json.telefone_raw, $('Normalize Phone').first().json.telefone, $('Extract Form Fields').first().json.perfil, $('Extract Form Fields').first().json.volume_faixa, $('Extract Form Fields').first().json.cnpj_raw, $('Clean CNPJ').first().json.cnpj, $('Extract Form Fields').first().json.estado_envio] }}"
+        }
+      },
+      "id": "11629bc8-aecc-4786-bc38-99577e180d66",
+      "name": "Save Disqualified Invalid",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2240,
+        624
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst extract = $('Extract Form Fields').first().json;\nconst phone = $('Normalize Phone').first().json;\nconst cnpjData = $('Clean CNPJ').first().json;\nconst enrich = $('02A Company Enrich').first().json;\n\n// Volume mapping\nconst volumeMap = {\n  'Abaixo de 2.000': 1500,\n  'Entre 2.000 e 4.000': 3000,\n  'Entre 4.000 e 10.000': 7000,\n  'Acima de 10.000': 12000\n};\nconst volume_numerico = volumeMap[extract.volume_faixa] || 0;\n\n// State to UF mapping\nconst stateMap = {\n  'acre': 'AC', 'alagoas': 'AL', 'amapa': 'AP', 'amazonas': 'AM',\n  'bahia': 'BA', 'ceara': 'CE', 'distrito federal': 'DF',\n  'espirito santo': 'ES', 'goias': 'GO', 'maranhao': 'MA',\n  'mato grosso': 'MT', 'mato grosso do sul': 'MS',\n  'minas gerais': 'MG', 'para': 'PA', 'paraiba': 'PB',\n  'parana': 'PR', 'pernambuco': 'PE', 'piaui': 'PI',\n  'rio de janeiro': 'RJ', 'rio grande do norte': 'RN',\n  'rio grande do sul': 'RS', 'rondonia': 'RO', 'roraima': 'RR',\n  'santa catarina': 'SC', 'sao paulo': 'SP', 'sergipe': 'SE',\n  'tocantins': 'TO',\n  // Accented versions\n  'amapá': 'AP', 'ceará': 'CE', 'espírito santo': 'ES',\n  'goiás': 'GO', 'maranhão': 'MA', 'paraná': 'PR',\n  'piauí': 'PI', 'rondônia': 'RO', 'são paulo': 'SP'\n};\nconst rawState = (extract.estado_envio || '').trim();\nlet estado_uf = stateMap[rawState.toLowerCase()] || rawState.toUpperCase();\n// If already a 2-letter code, use as-is\nif (estado_uf.length > 2) estado_uf = rawState.substring(0, 2).toUpperCase();\n\n// N/NE regions\nconst NNE = ['AC','AM','AP','PA','RO','RR','TO','AL','BA','CE','MA','PB','PE','PI','RN','SE'];\nconst isNNE = NNE.includes(estado_uf);\n\n// Classification logic\nlet path, path_reason;\nif (volume_numerico < 4000) {\n  path = 2;\n  path_reason = 'Volume < R$4000 - distribuidor';\n} else if (isNNE) {\n  path = 3;\n  path_reason = 'Qualificado: volume >= 4k + N/NE';\n} else {\n  path = 2;\n  path_reason = 'Volume >= 4k mas fora N/NE - distribuidor';\n}\n\nconst path_label = path === 2 ? 'distributor' : 'qualified';\nconst empresa = enrich.nome_fantasia || enrich.razao_social || extract.nome;\n\nreturn [{\n  json: {\n    // Original form data\n    facebook_lead_id: extract.facebook_lead_id,\n    form_id: extract.form_id,\n    page_id: extract.page_id,\n    nome: extract.nome,\n    email: extract.email,\n    telefone_raw: extract.telefone_raw,\n    telefone: phone.telefone,\n    perfil: extract.perfil,\n    volume_faixa: extract.volume_faixa,\n    volume_numerico: volume_numerico,\n    cnpj_raw: extract.cnpj_raw,\n    cnpj: cnpjData.cnpj,\n    estado_envio: extract.estado_envio,\n    estado_uf: estado_uf,\n    // Enrichment\n    cnpj_valido: true,\n    razao_social: enrich.razao_social || '',\n    nome_fantasia: enrich.nome_fantasia || '',\n    cnae: enrich.cnae || '',\n    cnpj_city: enrich.city || '',\n    cnpj_state: enrich.state || '',\n    // Classification\n    path: path,\n    path_reason: path_reason,\n    path_label: path_label,\n    empresa: empresa,\n    isNNE: isNNE\n  }\n}];\n"
+      },
+      "id": "05cecd77-64af-49bc-ab2f-2d1772a3382e",
+      "name": "Classify Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2528,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO fb_leads (\n  facebook_lead_id, form_id, page_id,\n  nome, email, telefone_raw, telefone,\n  perfil, volume_faixa, volume_numerico,\n  cnpj_raw, cnpj, estado_envio,\n  cnpj_valido, razao_social, nome_fantasia,\n  cnae, cnpj_city, cnpj_state,\n  path, path_reason\n) VALUES (\n  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,\n  $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21\n) ON CONFLICT (facebook_lead_id) DO UPDATE SET\n  updated_at = NOW()\nRETURNING id",
+        "options": {
+          "queryReplacement": "={{ [$json.facebook_lead_id, $json.form_id, $json.page_id, $json.nome, $json.email, $json.telefone_raw, $json.telefone, $json.perfil, $json.volume_faixa, $json.volume_numerico, $json.cnpj_raw, $json.cnpj, $json.estado_envio, $json.cnpj_valido, $json.razao_social, $json.nome_fantasia, $json.cnae, $json.cnpj_city, $json.cnpj_state, $json.path, $json.path_reason] }}"
+        }
+      },
+      "id": "e2ef2a17-d313-4bab-8683-336ecb80de3d",
+      "name": "Save fb_lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2784,
+        256
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://chat.agenciaprospect.space/api/v1/accounts/1/contacts/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $('Classify Lead').first().json.telefone }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "U1DuRjHXeeuaaiBdG1hTkuR6"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fd348ed5-fe87-423d-b4fe-03e6523fdf3f",
+      "name": "Search Chatwoot Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3072,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "32de4693-735d-4419-825a-ef99a9be9b7d",
+              "leftValue": "={{ ($json.payload || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "id": "7b8c1cb5-4628-4af4-9412-961c7ba4a6fe",
+      "name": "Contact Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3328,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "31822d54-866a-4c52-a7d6-c58ba582451d",
+              "name": "contact_id",
+              "value": "={{ $json.payload[0].id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "09f212ce-f5f5-4d06-a4b7-80563c3a6e76",
+      "name": "Use Existing Contact",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3776,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.agenciaprospect.space/api/v1/accounts/1/contacts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "U1DuRjHXeeuaaiBdG1hTkuR6"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"{{ $('Classify Lead').first().json.nome }}\",\n  \"phone_number\": \"+{{ $('Classify Lead').first().json.telefone }}\",\n  \"email\": \"{{ $('Classify Lead').first().json.email }}\",\n  \"custom_attributes\": {\n    \"fb_form_perfil\": \"{{ $('Classify Lead').first().json.perfil }}\",\n    \"fb_form_volume\": \"{{ $('Classify Lead').first().json.volume_faixa }}\",\n    \"fb_form_estado\": \"{{ $('Classify Lead').first().json.estado_envio }}\",\n    \"fb_form_cnpj\": \"{{ $('Classify Lead').first().json.cnpj }}\",\n    \"lead_path\": \"{{ $('Classify Lead').first().json.path_label }}\"\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "0e876189-de9e-4969-8a3d-09bf21d5760f",
+      "name": "Create Chatwoot Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3632,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "83e7b302-b88b-4f15-95ea-fcdb27019b6b",
+              "name": "contact_id",
+              "value": "={{ $json.id || $json.payload?.contact?.id || 0 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2b2710ed-43ef-4de6-b00b-a7fc38c5a11b",
+      "name": "Extract New Contact",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3904,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.agenciaprospect.space/api/v1/accounts/1/conversations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "U1DuRjHXeeuaaiBdG1hTkuR6"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"inbox_id\": 1,\n  \"contact_id\": {{ $json.contact_id }},\n  \"status\": \"open\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "4844ceaa-b326-4309-ae64-2fc5c49d9da9",
+      "name": "Create Conversation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4208,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "495a37b5-b895-4942-9926-18a04a1b8f67",
+              "leftValue": "={{ $(\"Classify Lead\").first().json.path }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0a272809-38d8-4575-b2ba-e66cd3a1cf47",
+      "name": "IF Path",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4480,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, razao_social, cidade, estado, telefone\nFROM distributors\nWHERE estado_uf = $1\n  AND pais = 'Brasil'\n  AND status = 'ATIVADO'\nORDER BY\n  CASE WHEN LOWER(cidade) = LOWER($2) THEN 0 ELSE 1 END,\n  cidade\nLIMIT 3",
+        "options": {
+          "queryReplacement": "={{ [$('Classify Lead').first().json.estado_uf, $('Classify Lead').first().json.cnpj_city || ''] }}"
+        }
+      },
+      "id": "9f9d7d8f-eb54-40bc-8e5f-ca34c2cab737",
+      "name": "Find Distributors",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        4768,
+        656
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cl = $('Classify Lead').first().json;\nconst convId = $('Create Conversation').first().json.id || '';\nconst fbLeadId = $('Save fb_lead').first().json.id || '';\nconst dists = $input.all();\n\nlet contactId = 0;\ntry { contactId = $('Extract New Contact').first().json.contact_id; } catch (e) {}\ntry { contactId = $('Use Existing Contact').first().json.contact_id; } catch (e) {}\n\nconst nome = (cl.nome || '').trim().split(' ')[0] || cl.nome || 'cliente';\nconst empresa = cl.empresa || cl.razao_social || cl.nome_fantasia || '';\nconst estado = cl.estado_envio || '';\nconst volumeFaixa = cl.volume_faixa || '';\nconst volumeNumerico = Number(cl.volume_numerico || 0);\nconst isLowVolume = volumeNumerico > 0 && volumeNumerico < 4000;\n\nconst distributors_json = dists.length > 0 && dists[0].json.razao_social\n  ? dists.map((d) => ({\n      id: d.json.id,\n      razao_social: d.json.razao_social,\n      cidade: d.json.cidade,\n      telefone: d.json.telefone || null,\n    }))\n  : [];\n\nconst hasDistributors = distributors_json.length > 0;\nconst listaDistribuidores = hasDistributors\n  ? distributors_json.map((d, i) => {\n      const fone = d.telefone ? `\\n   Tel: ${d.telefone}` : '';\n      return `${i + 1}. *${d.razao_social}* - ${d.cidade}${fone}`;\n    }).join('\\n\\n')\n  : '';\n\nconst abertura = `Ola ${nome}! Aqui e o Joao da ASX Iluminacao. 👋\\n\\nVi que a *${empresa}* se cadastrou pelo nosso formulario para conhecer nossos produtos.`;\n\nlet justificativa = '';\nif (isLowVolume) {\n  justificativa = `Pelo volume mensal informado no cadastro (*${volumeFaixa}*), o canal mais adequado neste momento e o atendimento pelos nossos distribuidores parceiros, que conseguem te atender com mais agilidade.`;\n} else {\n  justificativa = 'Para atendimento comercial direto, nossa operacao hoje prioriza negocios nas regioes Norte e Nordeste. Para a sua localidade, o canal mais adequado e o atendimento pelos nossos distribuidores parceiros.';\n}\n\nconst blocoDistribuidores = hasDistributors\n  ? `Na sua regiao, recomendo:\\n\\n${listaDistribuidores}`\n  : `No momento, nao encontrei um distribuidor ativo da ASX cadastrado para *${estado}*. Estou registrando internamente o seu interesse para acompanhamento da nossa rede.`;\n\nconst fechamento = 'Voce tambem pode consultar todos os nossos distribuidores em: asx.com.br/distribuidores\\n\\nQualquer duvida, estou por aqui!';\n\nconst message = [abertura, justificativa, blocoDistribuidores, fechamento]\n  .filter(Boolean)\n  .join('\\n\\n');\n\nreturn [{\n  json: {\n    message,\n    phone: cl.telefone,\n    distributors_json,\n    fb_lead_id: fbLeadId,\n    contact_id: contactId,\n    conversation_id: convId,\n  }\n}];\n"
+      },
+      "id": "bb2daa21-e1ff-48ef-83e9-67e5d4bee8e1",
+      "name": "Compose Message P2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5040,
+        656
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.agenciaprospect.space/message/sendText/ASX_SDR",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "nyKMjqn18RU3KxNGBcC0wBYNwWpZ0yzM"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $json.phone }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "68cdc281-d661-4a56-82e7-4ca9bc7611c2",
+      "name": "Send WhatsApp P2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5328,
+        656
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ (() => { const payload = $('Compose Message P2').first().json; const rows = payload.distributors_json || []; if (!rows.length) return 'SELECT 1'; return 'INSERT INTO distributor_recommendations (fb_lead_id, distributor_id) VALUES ' + rows.map(d => \"('\" + payload.fb_lead_id + \"', \" + d.id + \")\").join(', ') + ' ON CONFLICT DO NOTHING'; })() }}",
+        "options": {}
+      },
+      "id": "2f972f73-c2aa-4a24-9378-aeeec0532fd4",
+      "name": "Save Recommendations",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        5600,
+        656
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE fb_leads SET\n  status = 'contacted',\n  agent_type = 'distributor_agent',\n  chatwoot_contact_id = $1,\n  chatwoot_conversation_id = $2,\n  first_message_sent_at = NOW(),\n  distributors_recommended = $3::jsonb,\n  updated_at = NOW()\nWHERE id = $4::uuid",
+        "options": {
+          "queryReplacement": "={{ [$('Compose Message P2').first().json.contact_id, $('Compose Message P2').first().json.conversation_id, JSON.stringify($('Compose Message P2').first().json.distributors_json), $('Compose Message P2').first().json.fb_lead_id] }}"
+        }
+      },
+      "id": "8010fe79-6856-4f4f-aead-7c680fa9e151",
+      "name": "Update fb_lead P2",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        5888,
+        656
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.agenciaprospect.space/api/v1/accounts/1/contacts/{{ $('Compose Message P2').first().json.contact_id }}/labels",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "U1DuRjHXeeuaaiBdG1hTkuR6"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"labels\": [\"fb_lead\", \"path_distributor\"]}",
+        "options": {}
+      },
+      "id": "0d8c5a04-c675-48f0-a437-d50020490683",
+      "name": "Add Labels P2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6160,
+        656
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cl = $('Classify Lead').first().json;\nconst convId = $('Create Conversation').first().json.id || '';\nconst fbLeadId = $('Save fb_lead').first().json.id || '';\n\nlet contactId = 0;\ntry { contactId = $('Extract New Contact').first().json.contact_id; } catch(e) {}\ntry { contactId = $('Use Existing Contact').first().json.contact_id; } catch(e) {}\n\nconst nome = cl.nome.split(' ')[0];\nconst empresa = cl.empresa || cl.razao_social || cl.nome_fantasia || '';\nconst perfil = cl.perfil;\nconst volume = cl.volume_faixa;\nconst estado = cl.estado_envio;\n\nconst message = `Ola ${nome}! Aqui e o Joao, consultor comercial da ASX Iluminacao.\\n\\nVi que a *${empresa}* se cadastrou para negociacao direta conosco. Que otimo saber do seu interesse!\\n\\nConfirmei aqui seus dados do cadastro:\\n• Perfil: ${perfil}\\n• Volume mensal: ${volume}\\n• Estado: ${estado}\\n\\nEsta tudo certo? Posso dar andamento ao seu atendimento?`;\n\nreturn [{\n  json: {\n    message: message,\n    phone: cl.telefone,\n    fb_lead_id: fbLeadId,\n    contact_id: contactId,\n    conversation_id: convId\n  }\n}];\n"
+      },
+      "id": "45043ed0-ab54-4641-9ea5-0127a34c2f04",
+      "name": "Compose Message P3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4768,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.agenciaprospect.space/message/sendText/ASX_SDR",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "nyKMjqn18RU3KxNGBcC0wBYNwWpZ0yzM"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $json.phone }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5af0c74b-2afd-4fff-a529-463c48429e54",
+      "name": "Send WhatsApp P3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5040,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE fb_leads SET\n  status = 'contacted',\n  agent_type = 'qualified_agent',\n  chatwoot_contact_id = $1,\n  chatwoot_conversation_id = $2,\n  first_message_sent_at = NOW(),\n  updated_at = NOW()\nWHERE id = $3::uuid",
+        "options": {
+          "queryReplacement": "={{ [$('Compose Message P3').first().json.contact_id, $('Compose Message P3').first().json.conversation_id, $('Compose Message P3').first().json.fb_lead_id] }}"
+        }
+      },
+      "id": "bbceb84f-0da2-4a3b-8199-4f310a9f218c",
+      "name": "Update fb_lead P3",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        5328,
+        -48
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.agenciaprospect.space/api/v1/accounts/1/contacts/{{ $('Compose Message P3').first().json.contact_id }}/labels",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "U1DuRjHXeeuaaiBdG1hTkuR6"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"labels\": [\"fb_lead\", \"path_qualified\"]}",
+        "options": {}
+      },
+      "id": "e9136a5f-f846-418b-9126-c69c7ffe5f80",
+      "name": "Add Labels P3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5600,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Path 2 - Distribuidor\nBusca distribuidores no estado → Envia lista por WhatsApp",
+        "height": 96,
+        "width": 366,
+        "color": 4
+      },
+      "id": "4daa9427-8e1d-4cc0-8ff3-1eb15b9a69ff",
+      "name": "Sticky Note P2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4768,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Path 3 - Qualificado\nEnvia mensagem de qualificacao → Agente inbound cuida do resto",
+        "height": 96,
+        "width": 350,
+        "color": 5
+      },
+      "id": "f466b2ff-943a-4e5d-b065-2f42d8d320bf",
+      "name": "Sticky Note P3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4768,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "httpMethod": [
+          "POST",
+          "GET"
+        ],
+        "path": "=meta-leads",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -336,
+        448
+      ],
+      "id": "7448cd65-a2b0-4c33-8d37-1942a528a156",
+      "name": "Webhook1",
+      "webhookId": "9501b11c-16df-4051-a950-88d37df9d1e5"
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v25.0/{{ $json.body.entry[0].changes[0].value.leadgen_id }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "EAAWTXXgsXHABQwZAHRU2CvmIKevb2QBZBj4qTkriCX69aU7lZAuXwqBtQoO1kS6MVdDs2MH6FLPZCFNXrcpI2j1MDUFwN3FHhAc54UYJ435MIHZCZAuIcHhapbdIqZBOMrO6A9aaweI7ycp9PRadl24ndv1H013gKgE0gZBDCenwf8Px6m81J1Q4v1II4TWuqoZC1PnzZBRnZBe"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        304
+      ],
+      "id": "65b5ba86-8814-4633-a689-e95a310db0a3",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "848f1a87-ba77-4d81-935c-78ba4c840604",
+              "leftValue": "={{ $json.query['hub.verify_token'] }}",
+              "rightValue": "asx_fb_leads_2026",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -48,
+        624
+      ],
+      "id": "ce8ed63d-b02b-4580-9b48-db87f2bc9b5f",
+      "name": "Validate Verify Token"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/plain"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        192,
+        544
+      ],
+      "id": "12ab04d6-94fa-45a1-89f0-9215cedd981b",
+      "name": "Return Challenge"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Forbidden",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        192,
+        720
+      ],
+      "id": "1075775c-a1a2-48f4-a2d7-e30fecd30ed1",
+      "name": "Reject Verification"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "EVENT_RECEIVED",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -32,
+        304
+      ],
+      "id": "1e3614de-9952-445b-8b8a-aeb63e58e312",
+      "name": "Acknowledge FB Event"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO events (type, payload) VALUES ('workflow_success', $1::jsonb)",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ workflow: \"WF06\", path: 1, reason: \"cnpj_bad_format\", facebook_lead_id: $('Extract Form Fields').first().json.facebook_lead_id }) }}"
+        }
+      },
+      "name": "Log Success P1 Format",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1600,
+        624
+      ],
+      "id": "9fdabf7a-6207-4d50-b913-852c4c5840a6",
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO events (type, payload) VALUES ('workflow_success', $1::jsonb)",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ workflow: \"WF06\", path: 1, reason: \"cnpj_invalid\", facebook_lead_id: $('Extract Form Fields').first().json.facebook_lead_id }) }}"
+        }
+      },
+      "name": "Log Success P1 Invalid",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2480,
+        624
+      ],
+      "id": "ffb61d55-fd73-4ec0-a1bb-e8b91c24bd81",
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO events (type, payload) VALUES ('workflow_success', $1::jsonb)",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ workflow: \"WF06\", path: 2, phone: $('Normalize Phone').first().json.telefone, facebook_lead_id: $('Extract Form Fields').first().json.facebook_lead_id }) }}"
+        }
+      },
+      "name": "Log Success P2",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        6400,
+        656
+      ],
+      "id": "a47e428c-6077-418f-b8dc-d5875eceb3ac",
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO events (type, payload) VALUES ('workflow_success', $1::jsonb)",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ workflow: \"WF06\", path: 3, phone: $('Normalize Phone').first().json.telefone, facebook_lead_id: $('Extract Form Fields').first().json.facebook_lead_id }) }}"
+        }
+      },
+      "name": "Log Success P3",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        5840,
+        -48
+      ],
+      "id": "12634655-d47b-4c3d-88b9-71a77150d0a1",
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Extract Form Fields": {
+      "main": [
+        [
+          {
+            "node": "Normalize Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Phone": {
+      "main": [
+        [
+          {
+            "node": "Phone Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Phone Valid?": {
+      "main": [
+        [
+          {
+            "node": "Clean CNPJ",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Invalid Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean CNPJ": {
+      "main": [
+        [
+          {
+            "node": "CNPJ 14 Digits?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CNPJ 14 Digits?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Enrich",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Disqualified Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Enrich": {
+      "main": [
+        [
+          {
+            "node": "02A Company Enrich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02A Company Enrich": {
+      "main": [
+        [
+          {
+            "node": "CNPJ Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CNPJ Valid?": {
+      "main": [
+        [
+          {
+            "node": "Classify Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Disqualified Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Lead": {
+      "main": [
+        [
+          {
+            "node": "Save fb_lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save fb_lead": {
+      "main": [
+        [
+          {
+            "node": "Search Chatwoot Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Chatwoot Contact": {
+      "main": [
+        [
+          {
+            "node": "Contact Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact Found?": {
+      "main": [
+        [
+          {
+            "node": "Use Existing Contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Chatwoot Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Existing Contact": {
+      "main": [
+        [
+          {
+            "node": "Create Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Chatwoot Contact": {
+      "main": [
+        [
+          {
+            "node": "Extract New Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract New Contact": {
+      "main": [
+        [
+          {
+            "node": "Create Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Conversation": {
+      "main": [
+        [
+          {
+            "node": "IF Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Distributors": {
+      "main": [
+        [
+          {
+            "node": "Compose Message P2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose Message P2": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp P2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp P2": {
+      "main": [
+        [
+          {
+            "node": "Save Recommendations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Recommendations": {
+      "main": [
+        [
+          {
+            "node": "Update fb_lead P2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update fb_lead P2": {
+      "main": [
+        [
+          {
+            "node": "Add Labels P2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose Message P3": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp P3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp P3": {
+      "main": [
+        [
+          {
+            "node": "Update fb_lead P3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update fb_lead P3": {
+      "main": [
+        [
+          {
+            "node": "Add Labels P3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge FB Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Verify Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Verify Token": {
+      "main": [
+        [
+          {
+            "node": "Return Challenge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Verification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge FB Event": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Path": {
+      "main": [
+        [
+          {
+            "node": "Compose Message P3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find Distributors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Disqualified Format": {
+      "main": [
+        [
+          {
+            "node": "Log Success P1 Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Disqualified Invalid": {
+      "main": [
+        [
+          {
+            "node": "Log Success P1 Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Labels P2": {
+      "main": [
+        [
+          {
+            "node": "Log Success P2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Labels P3": {
+      "main": [
+        [
+          {
+            "node": "Log Success P3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Extract Form Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "binaryMode": "separate"
+  },
+  "versionId": "3e3f92fc-850e-4503-8bc7-71dfe0a7db1d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fb9317012284aa1a397c69541492ceb6ec5692041aefd8a1573dcad18efc2be7"
+  },
+  "id": "7LvmLJIL7CdbWpbt",
+  "tags": []
+}

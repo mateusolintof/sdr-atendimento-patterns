@@ -1,0 +1,196 @@
+{
+  "name": "02B-Score-Lead (callable)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "cnpj"
+            },
+            {
+              "name": "perfil"
+            },
+            {
+              "name": "uf_atuacao"
+            },
+            {
+              "name": "volume"
+            }
+          ]
+        }
+      },
+      "id": "start",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cnpj",
+              "name": "cnpj",
+              "value": "={{ ($json.cnpj || '').replace(/\\D/g, '') }}",
+              "type": "string"
+            },
+            {
+              "id": "perfil",
+              "name": "perfil",
+              "value": "={{ $json.perfil || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "uf_atuacao",
+              "name": "uf_atuacao",
+              "value": "={{ ($json.uf_atuacao || $json.regiao || '').toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "volume",
+              "name": "volume",
+              "value": "={{ $json.volume || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "cnae",
+              "name": "cnae",
+              "value": "={{ $json.cnae || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "fundacao",
+              "name": "fundacao",
+              "value": "={{ $json.fundacao || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "validate",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ========================================\n// SCORE LEAD - Cálculo de Qualificação\n// ========================================\n\nconst input = $input.first().json;\n\n// 1. Extrair dados\nconst cnpj = (input.cnpj || '').replace(/\\D/g, '');\nconst perfil = (input.perfil || '').toLowerCase();\nconst ufAtuacao = (input.uf_atuacao || '').toUpperCase();\nconst volumeStr = input.volume || '';\nconst cnae = input.cnae || '';\nconst fundacao = input.fundacao || '';\n\n// 2. Extrair valor numérico do volume\nconst volumeMatch = volumeStr.match(/[\\d.,]+/);\nlet volumeVal = 0;\nif (volumeMatch) {\n  volumeVal = parseFloat(volumeMatch[0].replace(/\\./g, '').replace(',', '.'));\n}\n\n// 3. Verificar critérios de qualificação\nconst hasCnpjValido = cnpj.length === 14;\n\nconst ufsNorte = ['AC', 'AM', 'AP', 'PA', 'RO', 'RR', 'TO'];\nconst ufsNordeste = ['AL', 'BA', 'CE', 'MA', 'PB', 'PE', 'PI', 'RN', 'SE'];\nconst ufsAlvo = [...ufsNorte, ...ufsNordeste];\nconst isRegiaoAlvo = ufsAlvo.includes(ufAtuacao);\n\nconst volumeMinimo = 4000;\nconst hasVolumeMinimo = volumeVal >= volumeMinimo;\n\n// 4. Determinar se está qualificado\nconst qualified = hasCnpjValido && isRegiaoAlvo && hasVolumeMinimo;\n\n// 5. Se não qualificado, retornar imediatamente\nif (!qualified) {\n  let reason = 'Fora dos critérios: ';\n  const motivos = [];\n  if (!hasCnpjValido) motivos.push('CNPJ inválido');\n  if (!isRegiaoAlvo) motivos.push('fora da região N/NE');\n  if (!hasVolumeMinimo) motivos.push(`volume < R$${volumeMinimo}`);\n  reason += motivos.join(', ');\n  \n  return {\n    qualified: false,\n    reason: reason,\n    score: 0,\n    class: 'desqualificado',\n    priority: 'none'\n  };\n}\n\n// 6. Calcular score (só para qualificados)\nlet score = 50; // Base\n\n// +20 se volume >= 8000\nif (volumeVal >= 8000) {\n  score += 20;\n} else if (volumeVal >= 5000) {\n  score += 10;\n}\n\n// +10 se perfil é revenda (maior potencial)\nif (perfil.includes('revenda') || perfil.includes('loja')) {\n  score += 10;\n}\n\n// +10 se CNAE relevante (autopeças, iluminação, elétrica)\nconst cnaesRelevantes = ['4530', '4541', '4542', '4661', '4673', '4674', '4742', '4754'];\nif (cnaesRelevantes.some(c => cnae.startsWith(c))) {\n  score += 10;\n}\n\n// +5 se empresa tem mais de 5 anos\nif (fundacao) {\n  const anoFundacao = new Date(fundacao).getFullYear();\n  const anosAtividade = new Date().getFullYear() - anoFundacao;\n  if (anosAtividade >= 5) {\n    score += 5;\n  }\n}\n\n// Limitar score a 100\nscore = Math.min(score, 100);\n\n// 7. Determinar classe e prioridade\nlet classe, priority;\nif (score >= 80) {\n  classe = 'quente';\n  priority = 'urgent';\n} else if (score >= 60) {\n  classe = 'morno';\n  priority = 'high';\n} else {\n  classe = 'frio';\n  priority = 'medium';\n}\n\nreturn {\n  qualified: true,\n  reason: null,\n  score: score,\n  class: classe,\n  priority: priority\n};"
+      },
+      "id": "calculate",
+      "name": "Calculate Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "qualified",
+              "name": "qualified",
+              "value": "={{ $json.qualified }}",
+              "type": "boolean"
+            },
+            {
+              "id": "reason",
+              "name": "reason",
+              "value": "={{ $json.reason }}",
+              "type": "string"
+            },
+            {
+              "id": "score",
+              "name": "score",
+              "value": "={{ $json.score }}",
+              "type": "number"
+            },
+            {
+              "id": "class",
+              "name": "class",
+              "value": "={{ $json.class }}",
+              "type": "string"
+            },
+            {
+              "id": "priority",
+              "name": "priority",
+              "value": "={{ $json.priority }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "return",
+      "name": "Return Score",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        672,
+        304
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Calculate Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Score": {
+      "main": [
+        [
+          {
+            "node": "Return Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "WBqj1UKzZORCANPo"
+  },
+  "versionId": "19d92119-6826-42f2-83a0-a0581ee03c64",
+  "meta": {
+    "instanceId": "fb9317012284aa1a397c69541492ceb6ec5692041aefd8a1573dcad18efc2be7"
+  },
+  "id": "gPxoxxAA88LVdZ7Y",
+  "tags": []
+}

@@ -1,0 +1,100 @@
+{
+  "name": "02D-Find-Distributors (callable)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "estado_uf"
+            },
+            {
+              "name": "cidade"
+            }
+          ]
+        }
+      },
+      "name": "Workflow Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        304
+      ],
+      "id": "2f02cdbe-e530-4158-b4c9-f52e5cafd69f"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, razao_social, cidade, estado, telefone\nFROM distributors\nWHERE estado_uf = $1\n  AND pais = 'Brasil'\n  AND status = 'ATIVADO'\nORDER BY\n  CASE WHEN LOWER(cidade) = LOWER($2) THEN 0 ELSE 1 END,\n  cidade\nLIMIT 3",
+        "options": {
+          "queryReplacement": "={{ [$json.estado_uf, $json.cidade] }}"
+        }
+      },
+      "name": "Query Distributors",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        256,
+        304
+      ],
+      "id": "632108e6-ada7-4f61-8de9-0ac9b2ac5c29",
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst distributors = items.map(item => ({\n  id: item.json.id,\n  razao_social: item.json.razao_social,\n  cidade: item.json.cidade,\n  estado: item.json.estado,\n  telefone: item.json.telefone || null\n}));\n\nlet message = '';\nif (distributors.length > 0) {\n  message = distributors.map((d, i) => {\n    const fone = d.telefone ? `\\n   Tel: ${d.telefone}` : '';\n    return `${i+1}. *${d.razao_social}*\\n   Cidade: ${d.cidade} - ${d.estado}${fone}`;\n  }).join('\\n\\n');\n} else {\n  message = 'Nenhum distribuidor encontrado neste estado. Estamos expandindo nossa rede!';\n}\n\nreturn [{\n  json: {\n    distributors,\n    count: distributors.length,\n    message,\n    found: distributors.length > 0\n  }\n}];"
+      },
+      "name": "Format Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        304
+      ],
+      "id": "a5d34d84-5c2c-4199-80ba-999036660d55"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Workflow Input": {
+      "main": [
+        [
+          {
+            "node": "Query Distributors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Distributors": {
+      "main": [
+        [
+          {
+            "node": "Format Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "a31504e8-f3ce-4122-b97a-73c571b2c056",
+  "meta": {
+    "instanceId": "fb9317012284aa1a397c69541492ceb6ec5692041aefd8a1573dcad18efc2be7"
+  },
+  "id": "DEwqsmZDj8fIMjuq",
+  "tags": []
+}

@@ -1,0 +1,65 @@
+{
+  "name": "05-Error-Logger",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "error-trigger-node",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO events (type, payload)\nVALUES ('infra_error', $1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ workflow_id: $json.workflow?.id || '', workflow_name: $json.workflow?.name || '', execution_id: $json.execution?.id || '', retry_of: $json.execution?.retryOf || '', last_node: $json.execution?.lastNodeExecuted || '', error_message: $json.execution?.error?.message || '', error_stack: $json.execution?.error?.stack || '' }) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        400,
+        0
+      ],
+      "id": "log-infra-error",
+      "name": "Log Infra Error",
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Log Infra Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "d6bf16c7-eac7-47a4-8f84-720803b6616a",
+  "meta": {
+    "instanceId": "fb9317012284aa1a397c69541492ceb6ec5692041aefd8a1573dcad18efc2be7"
+  },
+  "id": "WBqj1UKzZORCANPo",
+  "tags": []
+}

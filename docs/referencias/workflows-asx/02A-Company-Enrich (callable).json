@@ -1,0 +1,590 @@
+{
+  "name": "02A-Company-Enrich (callable)",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "cnpj"
+            }
+          ]
+        }
+      },
+      "id": "start",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cnpj",
+              "name": "cnpj",
+              "value": "={{ ($json.cnpj || '').replace(/\\D/g, '') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "validate",
+      "name": "Validate Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT cnpj, legal_name AS razao_social, trade_name AS nome_fantasia, cnae, city, state\nFROM companies\nWHERE cnpj = $1\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.cnpj] }}"
+        }
+      },
+      "id": "db-get",
+      "name": "DB - Get Company",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        448,
+        304
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if we have a company result from DB\nconst items = $input.all();\nconst cnpj = $('Validate Payload').first().json.cnpj;\n\n// If no items or first item is empty, company not found\nif (items.length === 0 || !items[0].json.razao_social) {\n  return [{ json: { found: false, cnpj: cnpj } }];\n}\n\n// Company found in DB\nreturn [{ \n  json: { \n    found: true,\n    cnpj: items[0].json.cnpj,\n    razao_social: items[0].json.razao_social,\n    nome_fantasia: items[0].json.nome_fantasia,\n    cnae: items[0].json.cnae,\n    city: items[0].json.city,\n    state: items[0].json.state\n  } \n}];"
+      },
+      "id": "check-result",
+      "name": "Check DB Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "found",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-found",
+      "name": "Company Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        896,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cnpj",
+              "name": "cnpj",
+              "value": "={{ $json.cnpj }}",
+              "type": "string"
+            },
+            {
+              "id": "razao_social",
+              "name": "razao_social",
+              "value": "={{ $json.razao_social }}",
+              "type": "string"
+            },
+            {
+              "id": "nome_fantasia",
+              "name": "nome_fantasia",
+              "value": "={{ $json.nome_fantasia || $json.razao_social }}",
+              "type": "string"
+            },
+            {
+              "id": "cnae",
+              "name": "cnae",
+              "value": "={{ $json.cnae || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "city",
+              "name": "city",
+              "value": "={{ $json.city || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "state",
+              "name": "state",
+              "value": "={{ $json.state || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "valid",
+              "name": "valid",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "source",
+              "name": "source",
+              "value": "database",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "map-db",
+      "name": "Return (DB)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1136,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.cnpja.com/office/{{ $(\"Validate Payload\").first().json.cnpj }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "cf236ff7-96a9-47f6-a51b-7788ef05155c-5ae42744-80e2-40c3-91e6-f84363d64389"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "api-cnpj",
+      "name": "CNPJ API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1136,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "success",
+              "leftValue": "={{ $json.company?.name || $json.alias }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-api-success",
+      "name": "API Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cnpj",
+              "name": "cnpj",
+              "value": "={{ $('Validate Payload').first().json.cnpj }}",
+              "type": "string"
+            },
+            {
+              "id": "razao_social",
+              "name": "razao_social",
+              "value": "={{ $json.company?.name || $json.alias || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "nome_fantasia",
+              "name": "nome_fantasia",
+              "value": "={{ $json.alias || $json.company?.name || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "cnae",
+              "name": "cnae",
+              "value": "={{ $json.mainActivity?.id || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "city",
+              "name": "city",
+              "value": "={{ $json.address?.city || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "state",
+              "name": "state",
+              "value": "={{ $json.address?.state || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "valid",
+              "name": "valid",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "source",
+              "name": "source",
+              "value": "api",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-api",
+      "name": "Extract API Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1584,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO companies (cnpj, legal_name, trade_name, cnae, city, state)\nVALUES ($1, $2, $3, $4, $5, $6)\nON CONFLICT (cnpj) DO UPDATE SET\n  legal_name = EXCLUDED.legal_name,\n  trade_name = EXCLUDED.trade_name,\n  cnae = EXCLUDED.cnae,\n  city = EXCLUDED.city,\n  state = EXCLUDED.state,\n  updated_at = NOW();",
+        "options": {
+          "queryReplacement": "={{ [$json.cnpj, $json.razao_social, $json.nome_fantasia, $json.cnae, $json.city, $json.state] }}"
+        }
+      },
+      "id": "db-upsert",
+      "name": "DB - Upsert Company",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1808,
+        304
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "JGKeXHuL7yJE7VmG",
+          "name": "Supabase ASX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cnpj",
+              "name": "cnpj",
+              "value": "={{ $('Extract API Data').first().json.cnpj }}",
+              "type": "string"
+            },
+            {
+              "id": "razao_social",
+              "name": "razao_social",
+              "value": "={{ $('Extract API Data').first().json.razao_social }}",
+              "type": "string"
+            },
+            {
+              "id": "nome_fantasia",
+              "name": "nome_fantasia",
+              "value": "={{ $('Extract API Data').first().json.nome_fantasia }}",
+              "type": "string"
+            },
+            {
+              "id": "cnae",
+              "name": "cnae",
+              "value": "={{ $('Extract API Data').first().json.cnae }}",
+              "type": "string"
+            },
+            {
+              "id": "city",
+              "name": "city",
+              "value": "={{ $('Extract API Data').first().json.city }}",
+              "type": "string"
+            },
+            {
+              "id": "state",
+              "name": "state",
+              "value": "={{ $('Extract API Data').first().json.state }}",
+              "type": "string"
+            },
+            {
+              "id": "valid",
+              "name": "valid",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "source",
+              "name": "source",
+              "value": "={{ $('Extract API Data').first().json.source }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "return-api",
+      "name": "Return (API)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2032,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cnpj",
+              "name": "cnpj",
+              "value": "={{ $('Validate Payload').first().json.cnpj }}",
+              "type": "string"
+            },
+            {
+              "id": "razao_social",
+              "name": "razao_social",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "nome_fantasia",
+              "name": "nome_fantasia",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "cnae",
+              "name": "cnae",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "city",
+              "name": "city",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "state",
+              "name": "state",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "valid",
+              "name": "valid",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "error",
+              "name": "error",
+              "value": "CNPJ não encontrado na Receita Federal",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "return-error",
+      "name": "Return (Not Found)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1584,
+        512
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Validate Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Payload": {
+      "main": [
+        [
+          {
+            "node": "DB - Get Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB - Get Company": {
+      "main": [
+        [
+          {
+            "node": "Check DB Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check DB Result": {
+      "main": [
+        [
+          {
+            "node": "Company Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Company Found?": {
+      "main": [
+        [
+          {
+            "node": "Return (DB)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CNPJ API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CNPJ API": {
+      "main": [
+        [
+          {
+            "node": "API Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API Success?": {
+      "main": [
+        [
+          {
+            "node": "Extract API Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return (Not Found)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract API Data": {
+      "main": [
+        [
+          {
+            "node": "DB - Upsert Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB - Upsert Company": {
+      "main": [
+        [
+          {
+            "node": "Return (API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "WBqj1UKzZORCANPo",
+    "availableInMCP": false
+  },
+  "versionId": "1356a0ec-370a-4adc-9ebd-cc7a0daa55ac",
+  "meta": {
+    "instanceId": "fb9317012284aa1a397c69541492ceb6ec5692041aefd8a1573dcad18efc2be7"
+  },
+  "id": "fRc8nB8qUjJUrTHw",
+  "tags": []
+}

@@ -1,0 +1,21 @@
+service	name	method	url_path	status	latency_ms	notes
+n8n	workflows	GET	/api/v1/workflows	200	2943	
+n8n	tags	GET	/api/v1/tags	200	495	
+n8n	credentials	GET	/api/v1/credentials/schema/httpHeaderAuth	200	500	
+n8n	variables	GET	/api/v1/variables	403	530	
+n8n	executions	GET	/api/v1/executions?limit=10	200	550	
+chatwoot	account	GET	/api/v1/accounts/2	200	664	
+chatwoot	inboxes	GET	/api/v1/accounts/2/inboxes	200	504	
+chatwoot	teams	GET	/api/v1/accounts/2/teams	200	495	
+chatwoot	agents	GET	/api/v1/accounts/2/agents	200	489	
+chatwoot	labels	GET	/api/v1/accounts/2/labels	200	496	
+chatwoot	custom_attributes	GET	/api/v1/accounts/2/custom_attribute_definitions	200	495	
+chatwoot	automation_rules	GET	/api/v1/accounts/2/automation_rules	200	527	
+chatwoot	webhooks	GET	/api/v1/accounts/2/webhooks	200	512	
+chatwoot	canned_responses	GET	/api/v1/accounts/2/canned_responses	200	508	
+evolution	fetchInstances	GET	/instance/fetchInstances	200	848	
+evolution	connectionState	GET	/instance/connectionState/convert-teste	200	474	
+evolution	webhook_find	GET	/webhook/find/convert-teste	200	475	
+evolution	chatwoot_find	GET	/chatwoot/find/convert-teste	200	471	
+evolution	settings_find	GET	/settings/find/convert-teste	200	484	
+supabase	rest_root	GET	/rest/v1/	200	-	--resolve fallback (DNS local não resolve)
