@@ -141,8 +141,7 @@ Limitações: introspecção via PostgREST só lista tabelas no schema exposto. 
 2. **Não vincular `convert-teste` ao Chatwoot ainda**: a Fase 3 (Chatwoot) deve primeiro criar o inbox no Chatwoot, depois bind via `POST /chatwoot/set/{instance}`. Ordem inversa pode criar inbox órfã.
 3. **Não criar webhook na Evolution ainda**: webhook só depois que `IGOR_01_Inbound_AfterHours` existir no n8n e estiver ATIVO (e validado em dry-run).
 4. **Rotacionar segredos expostos no terminal**: durante a auditoria, alguns valores do `.env` apareceram no stdout local (não foram gravados em nenhum arquivo nem commitados). **Recomenda-se rotacionar**: `N8N_API_KEY`, `CHATWOOT_API_TOKEN`, `EVOLUTION_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, senha do Postgres no `SUPABASE_DB_CONNECTION_STRING`. Ver §11.
-5. **Corrigir comentário malformado na linha 24 do `.env`**: começava com `**Configurar...` (estilo markdown) em vez de `#`. Quebrava qualquer `source .env` em bash. Já mitigado no `scripts/discover.sh` com parser próprio, mas a correção do arquivo é trivial — substituir `**` por `#`.
-6. **`reports/raw/*.json` está no `.gitignore`** — não vai ser commitado, mas existe localmente. Se quiser apagar após revisão: `rm -rf scripts/reports/raw/`.
+5. **`reports/raw/*.json` está no `.gitignore`** — não vai ser commitado, mas existe localmente. Se quiser apagar após revisão: `rm -rf scripts/reports/raw/`.
 
 ---
 
