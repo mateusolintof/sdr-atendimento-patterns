@@ -1,0 +1,247 @@
+{
+  "updatedAt": "2026-05-15T16:17:35.513Z",
+  "createdAt": "2026-05-15T16:17:35.513Z",
+  "id": "G8pMteuirc2yZgq5",
+  "name": "IGOR_TEST_Smoke_Trigger",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "trg-manual-001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "pg-load-001",
+      "name": "Load Test Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT NULLIF(value::text, 'null')::text AS smoke_test_phone_raw FROM public.settings WHERE key='smoke_test_phone' UNION ALL SELECT value::text FROM public.settings WHERE key='smoke_test_message';",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "code-validate-001",
+      "name": "Validate & Prepare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const rows = $input.all();\nconst phoneRaw = (rows[0]?.json?.smoke_test_phone_raw || '').replace(/^\"|\"$/g,'');\nconst msgRaw = (rows[1]?.json?.smoke_test_phone_raw || '').replace(/^\"|\"$/g,'');\nif (!phoneRaw || phoneRaw === 'null') {\n  throw new Error('IGOR_TEST_Smoke_Trigger: settings.smoke_test_phone is null. Set it first: UPDATE public.settings SET value=\\'\"5511987654321\"\\'::jsonb WHERE key=\\'smoke_test_phone\\';');\n}\nconst phone = String(phoneRaw).replace(/\\D/g,'');\nif (!/^55\\d{2}9\\d{8}$/.test(phone)) {\n  throw new Error('IGOR_TEST_Smoke_Trigger: phone formato inválido (esperado 55+DDD+9digits 13 chars). Got: ' + phone);\n}\nreturn [{ json: { phone, message: msgRaw || 'Mensagem de teste do Igor', test_run_id: 'SMOKE_' + new Date().toISOString().replace(/[:.]/g,'') } }];"
+      }
+    },
+    {
+      "id": "pg-log-trigger-001",
+      "name": "Log smoke_trigger_sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, workflow_name, payload) VALUES ('smoke_trigger_sent', $1, 'IGOR_TEST_Smoke_Trigger', $2::jsonb);",
+        "options": {
+          "queryReplacement": "={{ [$json.phone, JSON.stringify({ message: $json.message, test_run_id: $json.test_run_id, triggered_at: new Date().toISOString() })] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "http-send-001",
+      "name": "Evolution sendText to Test Phone",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://evo.almaconvert.com.br/message/sendText/convert-teste",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Validate & Prepare').first().json.phone, text: $('Validate & Prepare').first().json.message }) }}",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "neverError": false,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "DDhbwLsNclqTA18X",
+          "name": "igor_evolution_api"
+        }
+      }
+    },
+    {
+      "id": "set-final-001",
+      "name": "Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ok",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "phone",
+              "name": "phone",
+              "value": "={{ $('Validate & Prepare').first().json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "test_run_id",
+              "name": "test_run_id",
+              "value": "={{ $('Validate & Prepare').first().json.test_run_id }}",
+              "type": "string"
+            },
+            {
+              "id": "evo_resp",
+              "name": "evolution_status_code",
+              "value": "={{ $('Evolution sendText to Test Phone').first().json.statusCode }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Test Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Test Config": {
+      "main": [
+        [
+          {
+            "node": "Validate & Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Prepare": {
+      "main": [
+        [
+          {
+            "node": "Log smoke_trigger_sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log smoke_trigger_sent": {
+      "main": [
+        [
+          {
+            "node": "Evolution sendText to Test Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evolution sendText to Test Phone": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": "f37c5e31-6d80-4dba-8a70-8fd07a9dfd2c",
+  "activeVersionId": null,
+  "versionCounter": 1,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-05-15T16:17:35.513Z",
+      "createdAt": "2026-05-15T16:17:35.513Z",
+      "role": "workflow:owner",
+      "workflowId": "G8pMteuirc2yZgq5",
+      "projectId": "fs6cR9FbpYN5UqeV",
+      "project": {
+        "updatedAt": "2026-05-13T17:58:36.522Z",
+        "createdAt": "2026-05-13T17:55:45.649Z",
+        "id": "fs6cR9FbpYN5UqeV",
+        "name": "Mateus Ferreira <alma.lancamentos@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "a87c56dc-b486-4ae8-8d42-3490e7d3610d"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": null
+}
