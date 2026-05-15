@@ -1,0 +1,36 @@
+{
+  "event": "message_created",
+  "id": 700002,
+  "content": "Oi! Aqui é a Alice da equipe do Dr. Igor. Posso te ajudar agora.",
+  "content_type": "text",
+  "message_type": "outgoing",
+  "created_at": "2026-05-15T22:18:00Z",
+  "private": false,
+  "source_id": null,
+  "sender": {
+    "id": 17,
+    "name": "Alice Atendente",
+    "email": "alice@institutodrigor.test",
+    "type": "user"
+  },
+  "conversation": {
+    "id": 9602,
+    "status": "open",
+    "channel": "Channel::Api",
+    "inbox_id": 1,
+    "additional_attributes": {
+      "test_run_id": "IGOR_06_FIXTURE_outgoing_human"
+    },
+    "contact_inbox": {
+      "contact_id": 5002,
+      "inbox_id": 1
+    }
+  },
+  "additional_attributes": {
+    "test_run_id": "IGOR_06_FIXTURE_outgoing_human"
+  },
+  "account": {
+    "id": 1,
+    "name": "Instituto Dr. Igor"
+  }
+}
