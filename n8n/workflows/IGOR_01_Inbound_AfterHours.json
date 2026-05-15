@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-15T05:11:41.539Z",
+  "updatedAt": "2026-05-15T09:33:13.160Z",
   "createdAt": "2026-05-15T05:10:20.976Z",
   "id": "nC6ZhCVNn1fQiKfB",
   "name": "IGOR_01_Inbound_AfterHours",
@@ -1650,7 +1650,7 @@
     },
     {
       "id": "92f722bf-4e86-41b3-ae8a-407a460b6b64",
-      "name": "INSERT inbound_routed_pending_IGOR_03",
+      "name": "INSERT inbound_routed_to_IGOR_03",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
@@ -1659,15 +1659,148 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('inbound_routed_pending_IGOR_03', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('inbound_routed_to_IGOR_03', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
         "options": {
-          "queryReplacement": "={{ (function(){ const o = $('Build Normalized Output').first().json; return [o.phone, o.chatwoot_conversation_id, JSON.stringify({ msg_id: o.msg_id, message_type: o.message_type, fragments_count: o.fragments_count, normalized_text_preview: (o.normalized_text || '').slice(0, 240), should_handoff: o.should_handoff, handoff_reason: o.handoff_reason, safety_flags: o.safety_flags, chatwoot_contact_id: o.chatwoot_contact_id, push_name: o.push_name, instance: o.instance, reason: 'IGOR_03_not_yet_implemented_wave_4_placeholder', test_run_id: o.test_run_id })]; })() }}"
+          "queryReplacement": "={{ (function(){ const o = $('Build Normalized Output').first().json; return [o.phone, o.chatwoot_conversation_id, JSON.stringify({ msg_id: o.msg_id, message_type: o.message_type, fragments_count: o.fragments_count, normalized_text_preview: (o.normalized_text || '').slice(0, 240), should_handoff: o.should_handoff, handoff_reason: o.handoff_reason, safety_flags: o.safety_flags, chatwoot_contact_id: o.chatwoot_contact_id, push_name: o.push_name, instance: o.instance, target_workflow_id: 'iQCVbe1P8dC0vhay', test_run_id: o.test_run_id })]; })() }}"
         }
       },
       "credentials": {
         "postgres": {
           "id": "Z7DeBop4nK4JlIXO",
           "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "a3e1c5f4-1d72-4ab3-9c7e-1f5b9c0a2b11",
+      "name": "Call IGOR_03 Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        7280,
+        1536
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "iQCVbe1P8dC0vhay",
+          "cachedResultName": "IGOR_03_Agent_AfterHours"
+        },
+        "mode": "once",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Build Normalized Output').first().json.phone }}",
+            "msgId": "={{ $('Build Normalized Output').first().json.msg_id }}",
+            "chatwoot_conversation_id": "={{ $('Build Normalized Output').first().json.chatwoot_conversation_id }}",
+            "chatwoot_contact_id": "={{ $('Build Normalized Output').first().json.chatwoot_contact_id }}",
+            "normalized_text": "={{ $('Build Normalized Output').first().json.normalized_text }}",
+            "safety_flags": "={{ $('Build Normalized Output').first().json.safety_flags }}",
+            "should_handoff": "={{ $('Build Normalized Output').first().json.should_handoff }}",
+            "handoff_reason": "={{ $('Build Normalized Output').first().json.handoff_reason || '' }}",
+            "fragments_count": "={{ $('Build Normalized Output').first().json.fragments_count }}",
+            "test_run_id": "={{ $('Build Normalized Output').first().json.test_run_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "msgId",
+              "displayName": "msgId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "chatwoot_conversation_id",
+              "displayName": "chatwoot_conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "chatwoot_contact_id",
+              "displayName": "chatwoot_contact_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "normalized_text",
+              "displayName": "normalized_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "safety_flags",
+              "displayName": "safety_flags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "object"
+            },
+            {
+              "id": "should_handoff",
+              "displayName": "should_handoff",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "boolean"
+            },
+            {
+              "id": "handoff_reason",
+              "displayName": "handoff_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "fragments_count",
+              "displayName": "fragments_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number"
+            },
+            {
+              "id": "test_run_id",
+              "displayName": "test_run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
         }
       }
     },
@@ -2392,14 +2525,25 @@
       "main": [
         [
           {
-            "node": "INSERT inbound_routed_pending_IGOR_03",
+            "node": "INSERT inbound_routed_to_IGOR_03",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "INSERT inbound_routed_pending_IGOR_03": {
+    "INSERT inbound_routed_to_IGOR_03": {
+      "main": [
+        [
+          {
+            "node": "Call IGOR_03 Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call IGOR_03 Agent": {
       "main": [
         [
           {
@@ -2444,9 +2588,9 @@
     "builderVariant": "mcp"
   },
   "pinData": null,
-  "versionId": "75a157ad-0c93-4fb9-b2be-106d9aa55b4c",
+  "versionId": "5c22e8ec-2857-4893-84c9-c181791c6aa3",
   "activeVersionId": null,
-  "versionCounter": 2,
+  "versionCounter": 3,
   "triggerCount": 0,
   "shared": [
     {

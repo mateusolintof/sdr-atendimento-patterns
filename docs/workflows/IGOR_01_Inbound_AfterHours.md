@@ -67,7 +67,8 @@ Evolution Webhook
                                                                                            → UPSERT conversation ai_after_hours (upsert contacts + conversations state='ai_after_hours', ai_enabled, current_flow='after_hours')
                                                                                            → UPSERT message inbound (direction='inbound', role='user', from_me=false)
                                                                                            → CALL IGOR_04 fora_expediente (labels=['fora_expediente'] + custom_attributes.conversation.automation_state='ai_after_hours')
-                                                                                           → INSERT inbound_routed_pending_IGOR_03 (placeholder Wave 4 — payload inclui normalized_text, safety_flags, should_handoff, etc.)
+                                                                                           → INSERT inbound_routed_to_IGOR_03 (observability event — payload inclui normalized_text, safety_flags, should_handoff, target_workflow_id)
+                                                                                           → Call IGOR_03 Agent (executeWorkflow iQCVbe1P8dC0vhay, waitForSubWorkflow=true, payload 10 campos)
                                                                                            → Redis DEL lock
                                                                                            → Resp routed_ai_after_hours → Merge[9]
 ```
@@ -82,19 +83,20 @@ Evolution Webhook
 | `campaign_routed_pending_IGOR_12` | COND7 hit | campaign_id, campaign_contact_id, status, **placeholder enquanto IGOR_12 não existe** |
 | `holiday_policy_applied` | dentro do `is_holiday=true` (COND9 informational) | ymd, holiday_policy |
 | `inbound_batched` | COND10 no-lock | reason='lock_held', counter (>1) |
-| `inbound_routed_pending_IGOR_03` | happy path final | msg_id, message_type, fragments_count, normalized_text_preview, should_handoff, handoff_reason, safety_flags, **placeholder enquanto IGOR_03 não existe** |
+| `inbound_routed_to_IGOR_03` | happy path final (observability ANTES do executeWorkflow IGOR_03) | msg_id, message_type, fragments_count, normalized_text_preview, should_handoff, handoff_reason, safety_flags, target_workflow_id=`iQCVbe1P8dC0vhay` |
 
 ## Credentials wireadas (auto pela create_workflow_from_code)
 
 - `igor_supabase_postgres` (Postgres): 14 nodes (todos os INSERT/UPSERT/SELECT).
 - `igor_redis_embedded` (Redis): 6 nodes (Lock INCR, RPUSH, marker INCR, batch LRANGE-via-get, DEL batch, DEL lock).
 - `IGOR_02` (`GBmG9WZzW2p8Nn6f`) executeWorkflow: chamado em `CALL IGOR_02 Media Normalizer`.
+- `IGOR_03` (`iQCVbe1P8dC0vhay`) executeWorkflow: chamado em `Call IGOR_03 Agent` (final happy path, waitForSubWorkflow=true, 10 campos no payload).
 - `IGOR_04` (`AJF7dhGrqJEXMLqz`) executeWorkflow: chamado em `CALL IGOR_04 optout label` (COND5) e `CALL IGOR_04 fora_expediente` (final happy path).
 
-## Forward dependencies (placeholders)
+## Forward dependencies
 
-- **IGOR_03_Agent_AfterHours**: ainda não existe. No final do happy path, em vez de `executeWorkflow` IGOR_03, grava events('inbound_routed_pending_IGOR_03') com o payload completo. Quando IGOR_03 for criado (Wave 4 do plano), substituir o node `INSERT inbound_routed_pending_IGOR_03` por um `executeWorkflow` apontando para IGOR_03 — campos do payload já estão no formato esperado pelo agent.
-- **IGOR_12_Campaign_Inbound_Handler**: ainda não existe. COND7 grava events('campaign_routed_pending_IGOR_12') com campaign_id, campaign_contact_id, status. Quando IGOR_12 for criado (fase Campanha), substituir por `executeWorkflow` apontando para IGOR_12.
+- **IGOR_03_Agent_AfterHours**: WIRED direto via `executeWorkflow` após Fase C review (P0 fix). Node `Call IGOR_03 Agent` aponta para `iQCVbe1P8dC0vhay`. Observability mantida via `events('inbound_routed_to_IGOR_03')` ANTES da chamada. Substituiu placeholder `inbound_routed_pending_IGOR_03` (Wave 3) que existia quando IGOR_03 ainda não estava construído.
+- **IGOR_12_Campaign_Inbound_Handler** (placeholder): ainda não existe. COND7 grava events('campaign_routed_pending_IGOR_12') com campaign_id, campaign_contact_id, status. Quando IGOR_12 for criado (fase Campanha), substituir por `executeWorkflow` apontando para IGOR_12.
 
 ## Decisões de design — Redis lock+batching
 
@@ -129,7 +131,7 @@ Limitação conhecida (vs SET NX EX exato): se INCR é registrado mas EXPIRE fal
 
 ## Concerns / open items
 
-- **IGOR_03 placeholder**: o happy path termina em events('inbound_routed_pending_IGOR_03'). Lead inbound after-hours não receberá resposta enquanto Wave 4 não for entregue. Test smoke deve validar event presence + payload correto; quando IGOR_03 existir, substituir node + adicionar test e2e completo.
+- **IGOR_03 wired (Fase C P0 fix)**: o happy path final agora chama `executeWorkflow` IGOR_03 (`iQCVbe1P8dC0vhay`) síncrono (`waitForSubWorkflow=true`). Observability via events('inbound_routed_to_IGOR_03') logo antes da chamada. Lead inbound after-hours já é atendido conversacionalmente pela Alice (IGOR_03). Test smoke deve validar event presence + IGOR_03 execution chain (after_hours_started → response → save_lead_partial etc.).
 - **IGOR_12 placeholder**: leads de campanha (status=sent/delivered/replied/interested) são identificados e roteados via events, mas não recebem follow-up automatizado. Documentar em runbook que essas conversas hoje seguem para humano (Chatwoot) sem IA até IGOR_12 existir.
 - **Redis race window 3s**: para usuários muito rápidos enviando 3+ mensagens em <3s, alguns fragmentos podem chegar na lista batch após o LRANGE do holder. Esses ficam órfãos (limpos no DEL batch do holder, mas se chegarem após o DEL, ficam na lista até TTL 60s expirar). Mitigação: WhatsApp já tem rate-limit natural >1s entre mensagens; IGOR_08 monitora orphans.
 - **Holiday policy P1**: implementação atual sempre força `after_hours_force` para feriados. Mudança de policy (e.g. P2='block_completely') requer atualização de Check Business Hours + Holiday node.
@@ -138,7 +140,7 @@ Limitação conhecida (vs SET NX EX exato): se INCR é registrado mas EXPIRE fal
 ## Como ativar (Fase D / produção)
 
 1. Validar smoke completo Fase C (todos os 10 fixtures asserts PASS).
-2. Confirmar que IGOR_03 está construído e wireado (substituir placeholder).
+2. Confirmar que IGOR_03 (`iQCVbe1P8dC0vhay`) está ativo (`active=true`) — `Call IGOR_03 Agent` já está wireado direto via executeWorkflow.
 3. Confirmar `settings` tem todas as 7 keys populadas (`ai_enabled_global`, `workflows_enabled`, `after_hours_start`, `after_hours_end`, `timezone`, `holidays`, `holiday_policy`).
 4. Confirmar Redis credential `igor_redis_embedded` conectado.
 5. Ativar workflow: `PATCH /api/v1/workflows/nC6ZhCVNn1fQiKfB { active: true }`.

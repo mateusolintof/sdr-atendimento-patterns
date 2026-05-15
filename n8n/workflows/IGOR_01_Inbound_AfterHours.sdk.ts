@@ -20,15 +20,15 @@
 //   (a) PATCHing the resulting workflow via n8n REST API after create, or
 //   (b) Importing the canonical JSON file directly (preferred).
 //
-// FORWARD DEPENDENCIES (placeholders — to be wired in subsequent waves):
-//   - IGOR_03_Agent_AfterHours (Wave 4) — referenced only via events log
-//     'inbound_routed_pending_IGOR_03'. The executeWorkflow node is NOT
-//     materialized for IGOR_03 yet to avoid a hard reference to a missing
-//     workflowId. When IGOR_03 is built, add the executeWorkflow node and
-//     remove this placeholder log.
-//   - IGOR_12_Campaign_Inbound_Handler — campaign phase. Same approach:
-//     events('campaign_routed_pending_IGOR_12'). Wire executeWorkflow when
-//     IGOR_12 exists.
+// FORWARD DEPENDENCIES:
+//   - IGOR_03_Agent_AfterHours — WIRED. executeWorkflow node 'Call IGOR_03
+//     Agent' chama workflowId='iQCVbe1P8dC0vhay' com payload conforme trigger
+//     (10 campos). Observability mantida via events('inbound_routed_to_IGOR_03')
+//     ANTES da chamada (Fase C P0 fix; substituiu placeholder
+//     'inbound_routed_pending_IGOR_03' que existia durante Wave 3).
+//   - IGOR_12_Campaign_Inbound_Handler — campaign phase. Ainda placeholder:
+//     events('campaign_routed_pending_IGOR_12'). Wire executeWorkflow quando
+//     IGOR_12 existir.
 //
 // =============================================================================
 // IGOR_01_Inbound_AfterHours
@@ -59,8 +59,10 @@
 //   12. UPSERT conversations.state='ai_after_hours' + UPSERT messages +
 //       executeWorkflow IGOR_04 (labels=['fora_expediente'] +
 //       custom_attributes.conversation.automation_state='ai_after_hours') +
-//       events('inbound_routed_pending_IGOR_03', payload) placeholder.
-//       (Wave 4 substitui events placeholder por executeWorkflow IGOR_03.)
+//       events('inbound_routed_to_IGOR_03', payload) observability +
+//       executeWorkflow IGOR_03_Agent_AfterHours (iQCVbe1P8dC0vhay) com payload
+//       de 10 campos (phone/msgId/conversation/contact/normalized_text/
+//       safety_flags/should_handoff/handoff_reason/fragments_count/test_run_id).
 //
 // Sempre ao final do fluxo "got lock": DEL igor:lock:inbound:{phone}.
 //
@@ -78,6 +80,7 @@ import {
 } from '@n8n/workflow-sdk';
 
 const IGOR_02_WORKFLOW_ID = 'GBmG9WZzW2p8Nn6f';
+const IGOR_03_WORKFLOW_ID = 'iQCVbe1P8dC0vhay';
 const IGOR_04_WORKFLOW_ID = 'AJF7dhGrqJEXMLqz';
 
 // -----------------------------------------------------------------------------
@@ -1839,20 +1842,22 @@ const callIgor04ForaExpediente = node({
 });
 
 // -----------------------------------------------------------------------------
-// COND 12: route to IGOR_03 (placeholder — Wave 4)
+// COND 12: route to IGOR_03 (Fase C — wired)
+//   (a) Log observability event 'inbound_routed_to_IGOR_03' antes da chamada.
+//   (b) executeWorkflow IGOR_03_Agent_AfterHours (iQCVbe1P8dC0vhay) síncrono.
 // -----------------------------------------------------------------------------
 
-const logRoutedPendingIgor03 = node({
+const logRoutedToIgor03 = node({
   type: 'n8n-nodes-base.postgres',
   version: 2.6,
   config: {
-    name: 'INSERT inbound_routed_pending_IGOR_03',
+    name: 'INSERT inbound_routed_to_IGOR_03',
     parameters: {
       operation: 'executeQuery',
       query:
         "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload)\n" +
         "VALUES (\n" +
-        "  'inbound_routed_pending_IGOR_03',\n" +
+        "  'inbound_routed_to_IGOR_03',\n" +
         "  NULLIF($1::text, ''),\n" +
         "  NULLIF($2::text, '')::int,\n" +
         "  'IGOR_01_Inbound_AfterHours',\n" +
@@ -1860,7 +1865,7 @@ const logRoutedPendingIgor03 = node({
         ");",
       options: {
         queryReplacement: expr(
-          "={{ (function(){ const o = $('Build Normalized Output').first().json; return [o.phone, o.chatwoot_conversation_id, JSON.stringify({ msg_id: o.msg_id, message_type: o.message_type, fragments_count: o.fragments_count, normalized_text_preview: (o.normalized_text || '').slice(0, 240), should_handoff: o.should_handoff, handoff_reason: o.handoff_reason, safety_flags: o.safety_flags, chatwoot_contact_id: o.chatwoot_contact_id, push_name: o.push_name, instance: o.instance, reason: 'IGOR_03_not_yet_implemented_wave_4_placeholder', test_run_id: o.test_run_id })]; })() }}"
+          "={{ (function(){ const o = $('Build Normalized Output').first().json; return [o.phone, o.chatwoot_conversation_id, JSON.stringify({ msg_id: o.msg_id, message_type: o.message_type, fragments_count: o.fragments_count, normalized_text_preview: (o.normalized_text || '').slice(0, 240), should_handoff: o.should_handoff, handoff_reason: o.handoff_reason, safety_flags: o.safety_flags, chatwoot_contact_id: o.chatwoot_contact_id, push_name: o.push_name, instance: o.instance, target_workflow_id: 'iQCVbe1P8dC0vhay', test_run_id: o.test_run_id })]; })() }}"
         ),
       },
     },
@@ -1869,6 +1874,74 @@ const logRoutedPendingIgor03 = node({
     position: [9140, 220],
   },
   output: [{ executionStatus: 'success' }],
+});
+
+const callIgor03Agent = node({
+  type: 'n8n-nodes-base.executeWorkflow',
+  version: 1.3,
+  config: {
+    name: 'Call IGOR_03 Agent',
+    parameters: {
+      source: 'database',
+      workflowId: {
+        __rl: true,
+        mode: 'id',
+        value: IGOR_03_WORKFLOW_ID,
+        cachedResultName: 'IGOR_03_Agent_AfterHours',
+      },
+      mode: 'once',
+      workflowInputs: {
+        mappingMode: 'defineBelow',
+        value: {
+          phone: expr("={{ $('Build Normalized Output').first().json.phone }}"),
+          msgId: expr("={{ $('Build Normalized Output').first().json.msg_id }}"),
+          chatwoot_conversation_id: expr(
+            "={{ $('Build Normalized Output').first().json.chatwoot_conversation_id }}"
+          ),
+          chatwoot_contact_id: expr(
+            "={{ $('Build Normalized Output').first().json.chatwoot_contact_id }}"
+          ),
+          normalized_text: expr(
+            "={{ $('Build Normalized Output').first().json.normalized_text }}"
+          ),
+          safety_flags: expr(
+            "={{ $('Build Normalized Output').first().json.safety_flags }}"
+          ),
+          should_handoff: expr(
+            "={{ $('Build Normalized Output').first().json.should_handoff }}"
+          ),
+          handoff_reason: expr(
+            "={{ $('Build Normalized Output').first().json.handoff_reason || '' }}"
+          ),
+          fragments_count: expr(
+            "={{ $('Build Normalized Output').first().json.fragments_count }}"
+          ),
+          test_run_id: expr(
+            "={{ $('Build Normalized Output').first().json.test_run_id }}"
+          ),
+        },
+        matchingColumns: [],
+        schema: [
+          { id: 'phone', displayName: 'phone', required: false, defaultMatch: false, display: true, canBeUsedToMatch: true, type: 'string' },
+          { id: 'msgId', displayName: 'msgId', required: false, defaultMatch: false, display: true, canBeUsedToMatch: true, type: 'string' },
+          { id: 'chatwoot_conversation_id', displayName: 'chatwoot_conversation_id', required: false, defaultMatch: false, display: true, canBeUsedToMatch: true, type: 'string' },
+          { id: 'chatwoot_contact_id', displayName: 'chatwoot_contact_id', required: false, defaultMatch: false, display: true, canBeUsedToMatch: true, type: 'string' },
+          { id: 'normalized_text', displayName: 'normalized_text', required: false, defaultMatch: false, display: true, canBeUsedToMatch: true, type: 'string' },
+          { id: 'safety_flags', displayName: 'safety_flags', required: false, defaultMatch: false, display: true, canBeUsedToMatch: true, type: 'object' },
+          { id: 'should_handoff', displayName: 'should_handoff', required: false, defaultMatch: false, display: true, canBeUsedToMatch: true, type: 'boolean' },
+          { id: 'handoff_reason', displayName: 'handoff_reason', required: false, defaultMatch: false, display: true, canBeUsedToMatch: true, type: 'string' },
+          { id: 'fragments_count', displayName: 'fragments_count', required: false, defaultMatch: false, display: true, canBeUsedToMatch: true, type: 'number' },
+          { id: 'test_run_id', displayName: 'test_run_id', required: false, defaultMatch: false, display: true, canBeUsedToMatch: true, type: 'string' },
+        ],
+        attemptToConvertTypes: false,
+        convertFieldsToString: false,
+      },
+      options: { waitForSubWorkflow: true },
+    },
+    continueOnFail: true,
+    position: [9360, 220],
+  },
+  output: [{ ok: true, branch: 'after_hours' }],
 });
 
 const redisDelLock = node({
@@ -1882,7 +1955,7 @@ const redisDelLock = node({
     },
     credentials: { redis: newCredential('igor_redis_embedded') },
     continueOnFail: true,
-    position: [9360, 220],
+    position: [9580, 220],
   },
   output: [{ ok: true }],
 });
@@ -1900,12 +1973,12 @@ const respRouted = node({
           { id: 'rblocked', name: 'blocked', value: false, type: 'boolean' },
           { id: 'rbranch', name: 'branch', value: 'routed_ai_after_hours', type: 'string' },
           { id: 'rcond', name: 'blocked_at_condition', value: 0, type: 'number' },
-          { id: 'rreason', name: 'reason', value: 'routed_to_IGOR_03_placeholder_wave_4', type: 'string' },
+          { id: 'rreason', name: 'reason', value: 'routed_to_IGOR_03', type: 'string' },
           {
             id: 'rdownstream',
             name: 'downstream_calls',
             value: expr(
-              "={{ (function(){ const o = $('Build Normalized Output').first().json; const calls = []; if (o.message_type && o.message_type !== 'text') calls.push('IGOR_02'); calls.push('IGOR_04:fora_expediente'); calls.push('IGOR_03:placeholder'); return calls; })() }}"
+              "={{ (function(){ const o = $('Build Normalized Output').first().json; const calls = []; if (o.message_type && o.message_type !== 'text') calls.push('IGOR_02'); calls.push('IGOR_04:fora_expediente'); calls.push('IGOR_03'); return calls; })() }}"
             ),
             type: 'array',
           },
@@ -1914,7 +1987,7 @@ const respRouted = node({
       includeOtherFields: false,
       options: {},
     },
-    position: [9580, 220],
+    position: [9800, 220],
   },
   output: [
     {
@@ -1922,8 +1995,8 @@ const respRouted = node({
       blocked: false,
       branch: 'routed_ai_after_hours',
       blocked_at_condition: 0,
-      reason: 'routed_to_IGOR_03_placeholder_wave_4',
-      downstream_calls: ['IGOR_04:fora_expediente', 'IGOR_03:placeholder'],
+      reason: 'routed_to_IGOR_03',
+      downstream_calls: ['IGOR_04:fora_expediente', 'IGOR_03'],
     },
   ],
 });
@@ -1940,7 +2013,7 @@ const finalMerge = merge({
   config: {
     name: 'Final Response Merge',
     parameters: { mode: 'append', numberInputs: 10 },
-    position: [9820, 280],
+    position: [10040, 280],
   },
 });
 
@@ -2056,7 +2129,8 @@ export default workflow('IGOR_01_Inbound_AfterHours', 'IGOR_01_Inbound_AfterHour
   .to(upsertConversation)
   .to(upsertMessage)
   .to(callIgor04ForaExpediente)
-  .to(logRoutedPendingIgor03)
+  .to(logRoutedToIgor03)
+  .to(callIgor03Agent)
   .to(redisDelLock)
   .to(respRouted)
   .to(finalMerge.input(9));
