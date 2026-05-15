@@ -9,7 +9,7 @@ BEGIN;
 
 -- Telefone do operador de testes. Formato 55+DDD+9digits (13 chars).
 -- Configurar via UPDATE:
---   UPDATE public.settings SET value='"5511987654321"'::jsonb WHERE key='smoke_test_phone';
+--   UPDATE public.settings SET value='"5562998621000"'::jsonb WHERE key='smoke_test_phone';
 INSERT INTO public.settings (key, value, updated_at) VALUES
   ('smoke_test_phone', 'null'::jsonb, now())
 ON CONFLICT (key) DO NOTHING;
