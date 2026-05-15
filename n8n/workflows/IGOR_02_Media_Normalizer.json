@@ -1,0 +1,319 @@
+{
+  "name": "IGOR_02_Media_Normalizer",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {"name": "phone", "type": "string"},
+            {"name": "msgId", "type": "string"},
+            {"name": "messageType", "type": "string"},
+            {"name": "text", "type": "string"},
+            {"name": "media", "type": "object"},
+            {"name": "test_run_id", "type": "string"},
+            {"name": "_skip_llm_calls", "type": "boolean"}
+          ]
+        }
+      },
+      "id": "execute-trigger-node",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const media = j.media || {};\n  const messageType = (j.messageType || 'unknown').toString();\n  const text = (j.text || '').toString();\n  const filename = (media.filename || '').toString();\n  const caption = (media.caption || '').toString();\n  return {\n    json: {\n      phone: (j.phone || '').toString(),\n      msgId: (j.msgId || '').toString(),\n      messageType,\n      text,\n      media: {\n        url: media.url || null,\n        base64: media.base64 || null,\n        mime_type: media.mime_type || null,\n        caption,\n        filename\n      },\n      test_run_id: j.test_run_id || null,\n      _skip_llm_calls: j._skip_llm_calls === true\n    }\n  };\n});"
+      },
+      "id": "validate-payload-node",
+      "name": "Validate Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "branch-text",
+                    "leftValue": "={{ $json.messageType }}",
+                    "rightValue": "text",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "branch-audio",
+                    "leftValue": "={{ $json.messageType }}",
+                    "rightValue": "audio",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "audio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "branch-image",
+                    "leftValue": "={{ $json.messageType }}",
+                    "rightValue": "image",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "branch-document",
+                    "leftValue": "={{ $json.messageType }}",
+                    "rightValue": "document",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "document"
+            }
+          ]
+        },
+        "options": {"fallbackOutput": "extra", "renameFallbackOutput": "unknown"}
+      },
+      "id": "switch-message-type-node",
+      "name": "Switch Message Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const j = $json;\nconst flags = {\n  clinical: false,\n  sensitive_image: false,\n  payment_proof: false,\n  financial: false,\n  unknown_media: false,\n  audio_transcribed: false,\n  image_classified: false\n};\nreturn {\n  json: {\n    phone: j.phone,\n    msgId: j.msgId,\n    messageType: j.messageType,\n    normalized_text: j.text || '',\n    media_summary: '',\n    safety_flags: flags,\n    should_handoff: false,\n    handoff_reason: null,\n    test_run_id: j.test_run_id\n  }\n};"
+      },
+      "id": "build-output-text-node",
+      "name": "Build Output Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, -240]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const j = $json;\nconst flags = {\n  clinical: false,\n  sensitive_image: false,\n  payment_proof: false,\n  financial: false,\n  unknown_media: false,\n  audio_transcribed: true,\n  image_classified: false\n};\nconst normalized_text = j._skip_llm_calls\n  ? '[transcricao simulada]'\n  : '[transcricao pendente v2]';\nreturn {\n  json: {\n    phone: j.phone,\n    msgId: j.msgId,\n    messageType: j.messageType,\n    normalized_text,\n    media_summary: 'audio',\n    safety_flags: flags,\n    should_handoff: false,\n    handoff_reason: null,\n    test_run_id: j.test_run_id\n  }\n};"
+      },
+      "id": "build-output-audio-node",
+      "name": "Build Output Audio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, -120]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const j = $json;\nconst caption = (j.media && j.media.caption) || '';\nconst flags = {\n  clinical: false,\n  sensitive_image: false,\n  payment_proof: false,\n  financial: false,\n  unknown_media: false,\n  audio_transcribed: false,\n  image_classified: true\n};\nlet normalized_text;\nif (caption) {\n  normalized_text = caption;\n} else if (j._skip_llm_calls) {\n  normalized_text = '[descricao simulada]';\n} else {\n  normalized_text = '[descricao pendente v2]';\n}\nreturn {\n  json: {\n    phone: j.phone,\n    msgId: j.msgId,\n    messageType: j.messageType,\n    normalized_text,\n    media_summary: 'image',\n    safety_flags: flags,\n    should_handoff: false,\n    handoff_reason: null,\n    test_run_id: j.test_run_id\n  }\n};"
+      },
+      "id": "build-output-image-node",
+      "name": "Build Output Image",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const j = $json;\nconst filename = (j.media && j.media.filename) || '';\nconst text = j.text || '';\nconst haystack = (filename + ' ' + text);\nconst clinicalRegex = /exame|laudo|prescri[çc][aã]o|receita|CRM|diagn[oó]stico/i;\nconst isClinical = clinicalRegex.test(haystack);\nconst flags = {\n  clinical: isClinical,\n  sensitive_image: false,\n  payment_proof: false,\n  financial: false,\n  unknown_media: false,\n  audio_transcribed: false,\n  image_classified: false\n};\nconst normalized_text = text || filename || '[documento]';\nreturn {\n  json: {\n    phone: j.phone,\n    msgId: j.msgId,\n    messageType: j.messageType,\n    normalized_text,\n    media_summary: filename || 'document',\n    safety_flags: flags,\n    should_handoff: isClinical,\n    handoff_reason: isClinical ? 'documento_clinico_sensivel' : null,\n    test_run_id: j.test_run_id\n  }\n};"
+      },
+      "id": "build-output-document-node",
+      "name": "Build Output Document",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 120]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const j = $json;\nconst flags = {\n  clinical: false,\n  sensitive_image: false,\n  payment_proof: false,\n  financial: false,\n  unknown_media: true,\n  audio_transcribed: false,\n  image_classified: false\n};\nreturn {\n  json: {\n    phone: j.phone,\n    msgId: j.msgId,\n    messageType: j.messageType,\n    normalized_text: j.text || '',\n    media_summary: 'unknown',\n    safety_flags: flags,\n    should_handoff: true,\n    handoff_reason: 'midia_desconhecida',\n    test_run_id: j.test_run_id\n  }\n};"
+      },
+      "id": "build-output-unknown-node",
+      "name": "Build Output Unknown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 240]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, workflow_name, payload)\nVALUES ('media_normalized', 'IGOR_02_Media_Normalizer', $1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ phone: $json.phone, msgId: $json.msgId, message_type: $json.messageType, normalized_text: $json.normalized_text, safety_flags: $json.safety_flags, should_handoff: $json.should_handoff, handoff_reason: $json.handoff_reason, test_run_id: $json.test_run_id }) }}"
+        }
+      },
+      "id": "log-event-node",
+      "name": "Log Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [900, 0],
+      "credentials": {
+        "postgres": {
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "success-flag",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "normalized-text-out",
+              "name": "normalized_text",
+              "value": "={{ $json.normalized_text }}",
+              "type": "string"
+            },
+            {
+              "id": "should-handoff-out",
+              "name": "should_handoff",
+              "value": "={{ $json.should_handoff }}",
+              "type": "boolean"
+            },
+            {
+              "id": "handoff-reason-out",
+              "name": "handoff_reason",
+              "value": "={{ $json.handoff_reason }}",
+              "type": "string"
+            },
+            {
+              "id": "safety-flags-out",
+              "name": "safety_flags",
+              "value": "={{ $json.safety_flags }}",
+              "type": "object"
+            },
+            {
+              "id": "test-run-id-out",
+              "name": "test_run_id",
+              "value": "={{ $json.test_run_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "respond-success-node",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1120, 0]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {"node": "Validate Payload", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Validate Payload": {
+      "main": [
+        [
+          {"node": "Switch Message Type", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Switch Message Type": {
+      "main": [
+        [{"node": "Build Output Text", "type": "main", "index": 0}],
+        [{"node": "Build Output Audio", "type": "main", "index": 0}],
+        [{"node": "Build Output Image", "type": "main", "index": 0}],
+        [{"node": "Build Output Document", "type": "main", "index": 0}],
+        [{"node": "Build Output Unknown", "type": "main", "index": 0}]
+      ]
+    },
+    "Build Output Text": {
+      "main": [
+        [{"node": "Log Event", "type": "main", "index": 0}]
+      ]
+    },
+    "Build Output Audio": {
+      "main": [
+        [{"node": "Log Event", "type": "main", "index": 0}]
+      ]
+    },
+    "Build Output Image": {
+      "main": [
+        [{"node": "Log Event", "type": "main", "index": 0}]
+      ]
+    },
+    "Build Output Document": {
+      "main": [
+        [{"node": "Log Event", "type": "main", "index": 0}]
+      ]
+    },
+    "Build Output Unknown": {
+      "main": [
+        [{"node": "Log Event", "type": "main", "index": 0}]
+      ]
+    },
+    "Log Event": {
+      "main": [
+        [{"node": "Success Response", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
+  }
+}
