@@ -55,7 +55,7 @@ UPSERT idempotente em conversations por `chatwoot_conversation_id` (unique):
 
 ## Como testar
 ```bash
-bash scripts/test-workflow.sh IGOR_AUX_update_conversation_state fixtures/aux-update-conv.json
+bash scripts/test-workflow.sh <workflow_id>
 ```
 
 Esperado: 3 asserts ✓ (events.conversation_state_updated, payload com

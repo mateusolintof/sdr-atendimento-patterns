@@ -2,7 +2,7 @@
 
 **n8n workflow id**: `GBmG9WZzW2p8Nn6f`
 **URL**: https://n8n.almaconvert.com.br/workflow/GBmG9WZzW2p8Nn6f
-**Status**: `active: false` (manual ativacao em Fase C)
+**Status**: `active: true` (ativado em 2026-05-15).
 **Source de verdade**: `n8n/workflows/IGOR_02_Media_Normalizer.json` (canonical exportado pos PATCH).
 **SDK source**: `n8n/workflows/IGOR_02_Media_Normalizer.sdk.ts` (header tem SOURCE OF TRUTH NOTICE).
 
@@ -85,7 +85,7 @@ Execute Workflow Trigger
 
 Verificado via `GET /api/v1/workflows/GBmG9WZzW2p8Nn6f`:
 
-- `active: false`
+- `active: true`
 - `settings.executionOrder: "v1"`
 - `settings.availableInMCP: true`
 - `settings.errorWorkflow: "ZrsbaSTlW5bqMEaS"` (= IGOR_07_Error_Logger). **Aplicado via PUT REST API** apos `create_workflow_from_code` (que nao expoe esse campo).
@@ -101,7 +101,7 @@ A query `UPSERT Messages` usa `ON CONFLICT (msg_id) WHERE msg_id IS NOT NULL DO 
 
 ## Comparacao com debt item 2 (RESOLVIDO)
 
-Debt anterior (`docs/superpowers/debt/2026-05-15-simplifications-to-revert.md §2`):
+Reconstruído NO SIMPLIFICATIONS após reset:
 
 - Branch audio: era **stub** retornando `'[transcricao simulada]'` sob `_skip_llm_calls=true`. -> **AGORA**: httpRequest POST real para `https://api.openai.com/v1/audio/transcriptions` com `model=gpt-4o-transcribe`, language=pt. Nenhuma flag `_skip_llm_calls` existe no codigo.
 - Branch image: era **stub** retornando caption ou `'[descricao simulada]'`. -> **AGORA**: httpRequest POST real para `https://api.openai.com/v1/chat/completions` com `model=gpt-4o-mini`, response_format json_object, prompt PT-BR LITERAL, parse + derive should_handoff/handoff_reason.

@@ -23,4 +23,4 @@ após importação. Esse setting é feito pelo orquestrador na fase de wiring
 (não nesta task).
 
 ## Como testar localmente
-`bash scripts/test-workflow.sh IGOR_07_Error_Logger fixtures/error-trigger-simulated.json`
+`bash scripts/test-workflow.sh <workflow_id>

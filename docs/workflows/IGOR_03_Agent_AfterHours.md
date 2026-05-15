@@ -7,7 +7,7 @@ Agente conversacional Alice — fluxo receptivo fora de expediente. Workflow cal
 - **Workflow ID (n8n)**: `iQCVbe1P8dC0vhay`
 - **URL**: `https://n8n.almaconvert.com.br/workflow/iQCVbe1P8dC0vhay`
 - **Trigger**: `executeWorkflowTrigger` (callable). 10 inputs.
-- **Settings**: `active: false`, `executionOrder: v1`, `errorWorkflow: ZrsbaSTlW5bqMEaS` (IGOR_07_Error_Logger).
+- **Settings**: `active: true`, `executionOrder: v1`, `errorWorkflow: ZrsbaSTlW5bqMEaS` (IGOR_07_Error_Logger).
 - **Tags**: `igor`, `inbound`, `agent`, `langchain`, `fase-b-rebuild`.
 
 ## Contrato (de `docs/IMPLEMENTATION_PLAN.md §IGOR_03_Agent_AfterHours` + `docs/logica-fluxo-igor-receptivo-fora-expediente.md §§5, 6, 11, 12`)
@@ -186,7 +186,7 @@ Tools AUX emitem seus próprios events (`lead_saved_partial`, `conversation_stat
 
 ## Fixtures e asserts
 
-- 7 fixtures: `fixtures/IGOR_03_*.json` (first_message_text, compliance_fast_path, collecting_name_response, collecting_objective, collecting_callback, handoff_ready, dry_run_mode).
+- 7 fixtures: `<fixture-payload>` (first_message_text, compliance_fast_path, collecting_name_response, collecting_objective, collecting_callback, handoff_ready, dry_run_mode).
 - Asserts: `tests/asserts-IGOR_03_Agent_AfterHours.sql` cobrindo events + persistência lead via AUX.
 - Expected: `tests/expected-IGOR_03_Agent_AfterHours.md` mapeando fixture → branch → tools → output.
 
@@ -196,7 +196,6 @@ Tools AUX emitem seus próprios events (`lead_saved_partial`, `conversation_stat
 - **SDK build**: `n8n/workflows/IGOR_03_Agent_AfterHours.sdk.ts` (gera estrutura inicial; perde `active`, `settings.errorWorkflow`, `settings.executionOrder`, `tags` quando regenerado — re-aplicar via REST).
 - **Spec funcional**: `docs/logica-fluxo-igor-receptivo-fora-expediente.md §§5-12`.
 - **Contrato**: `docs/IMPLEMENTATION_PLAN.md §IGOR_03_Agent_AfterHours`.
-- **Debt reverted**: `docs/superpowers/debt/2026-05-15-simplifications-to-revert.md §6` (happy path + reply path agora completos).
 
 ## Próximas etapas (Fase C)
 

@@ -3,7 +3,7 @@
 ## Identificação
 - **n8n_id**: `AJF7dhGrqJEXMLqz`
 - **n8n URL**: `https://n8n.almaconvert.com.br/workflow/AJF7dhGrqJEXMLqz`
-- **Estado inicial**: `active: false` (ativação manual no UI após Fase C).
+- **Estado**: `active: true` (ativado em 2026-05-15 via MCP publish_workflow).
 - **Tipo**: callable (sub-workflow) invocado via `executeWorkflow`.
 
 ## Contrato literal (de `docs/IMPLEMENTATION_PLAN.md:144-154`)
@@ -23,7 +23,7 @@
 
 ## Gates aplicados
 - `errorWorkflow: ZrsbaSTlW5bqMEaS` (IGOR_07_Error_Logger) — **persistido no JSON canônico** (`settings.errorWorkflow`). Aplicado automaticamente quando o workflow é importado via JSON ou via n8n REST API. Verifique no UI se um reimport from SDK ocorrer (vide nota em `IGOR_04_Tool_Labels_Attributes.sdk.ts`).
-- `active: false` por padrão — **persistido no JSON canônico**. Ativação manual no UI após validação em Fase C.
+- `active: true` (ativado em 2026-05-15).
 - `tags: ['igor', 'inbound', 'tool', 'fase-b-rebuild']` — **persistido no JSON canônico**. Aplicado em import.
 - `availableInMCP: true` — habilita gestão via n8n MCP (`archive_workflow`, `get_workflow_details` etc).
 - Sem trigger externo (webhook/cron) — sem necessidade de `settings.workflows_enabled.IGOR_04` check; invocação só vem de outros workflows IGOR_*.
@@ -159,11 +159,9 @@ Saída esperada:
 3. (Opcional) Validar no UI que `Settings → Error Workflow` aponta para o IGOR_07 atual (caso IGOR_07 tenha sido reimportado com ID diferente do persistido `ZrsbaSTlW5bqMEaS`).
 
 ## Como testar (Fase C — deferido)
-1. Importar fixtures de `fixtures/IGOR_04_*.json`.
 2. Para cada fixture, invocar o workflow via trampoline ou execute_workflow MCP substituindo `chatwoot_conversation_id` por uma conversa real de teste no Chatwoot (criar uma se necessário).
 3. Rodar asserts SQL de `tests/asserts-IGOR_04_Tool_Labels_Attributes.sql` filtrando por `payload->>'test_run_id'`.
 4. Comportamento esperado por fixture documentado em `tests/expected-IGOR_04_Tool_Labels_Attributes.md`.
 
 ## Histórico
 - 2026-05-15 — Workflow criado via MCP `create_workflow_from_code` (NO SIMPLIFICATIONS rebuild, Wave 1 da Fase B).
-- Debt item 3 (`docs/superpowers/debt/2026-05-15-simplifications-to-revert.md`) — RESOLVIDO.

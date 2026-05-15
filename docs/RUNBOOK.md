@@ -1,178 +1,40 @@
 # RUNBOOK — Instituto Dr. Igor
 
-> Última atualização: 2026-05-15 (pós Fase B + Fase C reviews).
+> Última atualização: 2026-05-15. Para arquitetura completa, leia `docs/ARCHITECTURE.md`.
 
 ## Sumário
 
-1. [Fase C — Smoke Tests (next step para você)](#fase-c--smoke-tests)
-2. [Diagnóstico rápido](#diagnóstico-rápido)
-3. [Pausar Igor em runtime](#pausar-igor-em-runtime)
-4. [Pausar workflow específico](#pausar-workflow-específico)
-5. [Trocar credencial sem reimportar workflows](#trocar-credencial-sem-reimportar-workflows)
-6. [Reprocessar mensagem perdida](#reprocessar-mensagem-perdida)
-7. [Conta sob ataque / opt-out em massa](#conta-sob-ataque--opt-out-em-massa)
-8. [Restaurar backup de workflows](#restaurar-backup-de-workflows)
-
----
-
-## Fase C — Smoke Tests
-
-### Pré-requisitos OBRIGATÓRIOS (user-side)
-
-Antes de rodar smoke tests, complete na ordem:
-
-#### 1. Aplicar migration 008 no Supabase
-- Abra Supabase SQL Editor.
-- Cole o conteúdo de `supabase/migrations/008_messages_msgid_unique.sql`.
-- Execute. Idempotente (`CREATE UNIQUE INDEX IF NOT EXISTS`).
-- Verificar: `\d messages` deve mostrar `uq_messages_msgid_partial` como partial UNIQUE.
-
-#### 2. Criar credencial `igor_evolution_api` no n8n
-- UI n8n → Credentials → New → `HTTP Header Auth`.
-- Nome: `igor_evolution_api`.
-- Header: `apikey`.
-- Value: o valor de `EVOLUTION_API_KEY` do `.env` (NÃO exponha no commit history).
-- Save.
-
-#### 3. Confirmar/wire credentials nos HTTP nodes
-Verificar em cada workflow que os HTTP nodes têm a credencial correta selecionada:
-
-| Workflow | HTTP Node | Credencial esperada |
-|----------|-----------|---------------------|
-| IGOR_04 | GET Current Labels | `igor_chatwoot_api` (httpHeaderAuth header `api_access_token`) |
-| IGOR_04 | POST Merged Labels | `igor_chatwoot_api` |
-| IGOR_04 | POST Conversation Attrs | `igor_chatwoot_api` |
-| IGOR_04 | PUT Contact Attrs | `igor_chatwoot_api` |
-| IGOR_05 | Private Note | `igor_chatwoot_api` |
-| IGOR_05 | Assign Team | `igor_chatwoot_api` |
-| IGOR_05 | Assign Assignee | `igor_chatwoot_api` |
-| IGOR_05 | Evolution sendText | `igor_evolution_api` (header `apikey`) |
-| IGOR_06 | (sem HTTP externo — só postgres + executeWorkflow) | — |
-| IGOR_08 | Chatwoot Ping | `igor_chatwoot_api` |
-| IGOR_08 | Evolution Ping | `igor_evolution_api` (criar antes) |
-| IGOR_08 | OpenAI Ping | `igor_openai` (já wired) |
-| IGOR_02 | Audio Fetch URL | (nenhuma — URL pública) |
-| IGOR_02 | Audio Transcribe | `igor_openai` (já wired) |
-| IGOR_02 | Image Vision | `igor_openai` (já wired) |
-| IGOR_02 | Image Fetch URL | (nenhuma — URL pública) |
-| IGOR_03 | Presence Composing | `igor_evolution_api` |
-| IGOR_03 | Send WhatsApp | `igor_evolution_api` |
-
-#### 4. Confirmar settings em Supabase
-```sql
--- Verifique se settings existem
-SELECT key, value FROM settings WHERE key IN (
-  'ai_enabled_global',
-  'workflows_enabled',
-  'holidays',
-  'holiday_policy',
-  'after_hours_start',
-  'after_hours_end',
-  'timezone'
-);
-
--- Se faltar algum, inserir:
-INSERT INTO settings (key, value) VALUES
-  ('ai_enabled_global', 'true'),
-  ('workflows_enabled', '{"IGOR_01":true,"IGOR_02":true,"IGOR_03":true,"IGOR_04":true,"IGOR_05":true,"IGOR_06":true,"IGOR_08":true}'),
-  ('holidays', '[]'),
-  ('holiday_policy', 'after_hours_force'),
-  ('after_hours_start', '18:30'),
-  ('after_hours_end', '07:30'),
-  ('timezone', 'America/Sao_Paulo')
-ON CONFLICT (key) DO NOTHING;
-```
-
-#### 5. Confirmar env vars no container n8n
-Acesse o container n8n e confirme:
-- `CHATWOOT_BASE_URL`
-- `CHATWOOT_ACCOUNT_ID`
-- `EVOLUTION_BASE_URL`
-- `EVOLUTION_INSTANCE_NAME`
-- `N8N_BASE_URL`
-- `IGOR_DRY_RUN` (default `true` para smoke)
-- `ALLOW_REAL_WHATSAPP_SEND` (default `false` para smoke)
-
-### Executar 10 smoke tests obrigatórios
-
-Os 10 smoke tests do `IMPLEMENTATION_PLAN.md §10` cobrem:
-
-| # | Cenário | Fixture | Workflow alvo | Asserts |
-|---|---------|---------|---------------|---------|
-| 1 | texto fora expediente (happy path) | `fixtures/IGOR_01_text_afterhours.json` | IGOR_01 | events('inbound_routed_to_IGOR_03'), conversations.state='ai_after_hours' |
-| 2 | áudio fora expediente | `fixtures/IGOR_01_audio_afterhours.json` | IGOR_01 → IGOR_02 → IGOR_03 | events('media_normalized'), messages.transcript não-vazio |
-| 3 | imagem com caption | `fixtures/IGOR_02_image_with_caption.json` | IGOR_02 | branch image_with_caption, normalized_text=caption |
-| 4 | documento clínico | `fixtures/IGOR_02_document_clinical.json` | IGOR_02 → IGOR_05 (compliance) | safety_flags.clinical=true, should_handoff=true, events('handoff_complete') |
-| 5 | fromMe | `fixtures/IGOR_01_fromme.json` | IGOR_01 | events('inbound_blocked', reason='fromMe'), zero downstream |
-| 6 | opt-out | `fixtures/IGOR_01_optout.json` (pré-seed contacts.do_not_contact=true) | IGOR_01 → IGOR_04 | events('inbound_blocked', reason='opt_out'), label `optout` |
-| 7 | human takeover | `fixtures/IGOR_06_message_created_outgoing_human.json` | IGOR_06 → IGOR_04 | conversations.human_locked=true, label `atendimento_humano`, events('human_assumed') |
-| 8 | handoff completo | `fixtures/IGOR_05_handoff_with_lead_callback.json` | IGOR_05 → IGOR_04 | leads.status='aguardando_atendente', labels handoff_done/ai_disabled, events('handoff_complete') |
-| 9 | dry_run send | `fixtures/IGOR_05_handoff_dry_run.json` (env IGOR_DRY_RUN=true) | IGOR_05 | events('dry_run_send') em vez de Evolution call |
-| 10 | batch lock held | 2x `fixtures/IGOR_01_batch_lock_held.json` em sequência rápida | IGOR_01 | primeira passa, segunda → events('inbound_batched', reason='lock_held') |
-
-### Executar smoke via n8n MCP
-
-Para cada fixture:
-
-```bash
-# Carregar fixture
-FIXTURE=$(cat fixtures/IGOR_01_text_afterhours.json)
-
-# Executar workflow (use n8n MCP `execute_workflow` ou REST API direta)
-# Via REST:
-set -a; source .env; set +a
-curl -X POST -H "X-N8N-API-KEY: $N8N_API_KEY" -H "Content-Type: application/json" \
-  "$N8N_BASE_URL/api/v1/workflows/<WORKFLOW_ID>/execute" \
-  -d "{\"workflowData\": $FIXTURE}"
-
-# Aguardar execução (verificar status via GET /executions/{id})
-
-# Rodar asserts
-psql $POSTGRES_URL -f tests/asserts-IGOR_01_Inbound_AfterHours.sql
-```
-
-### Critério de aprovação
-
-- Todos os 10 smoke tests passam asserts.
-- Zero erros no IGOR_07_Error_Logger.
-- Health check (IGOR_08) reporta `overall_status='healthy'` após bateria.
-- Nenhuma mensagem real enviada por WhatsApp (`ALLOW_REAL_WHATSAPP_SEND=false`).
-
-### Ativação produção
-
-Após smoke 100% green:
-
-1. Mude ENV: `IGOR_DRY_RUN=false`, `ALLOW_REAL_WHATSAPP_SEND=true`.
-2. Crie credencial Evolution se ainda não criada.
-3. Configure número de teste autorizado no `.env` (`EVOLUTION_TEST_NUMBER`).
-4. Active workflows na ordem:
-   - IGOR_07 (já ativo).
-   - IGOR_08 (cron health).
-   - IGOR_04, IGOR_02 (callables wave 1).
-   - IGOR_06, IGOR_05 (wave 2).
-   - IGOR_03 (wave 4 — agent).
-   - IGOR_01 (webhook inbound — último, pois ele dispara o pipeline inteiro).
-5. Aponte webhook Evolution para `/webhook/igor/inbound`.
-6. Aponte webhook Chatwoot para `/webhook/igor/chatwoot`.
-7. Monitore IGOR_08 events('health_check') por 1h.
-8. Envie mensagem de teste do número autorizado para validar end-to-end.
+1. [Diagnóstico rápido](#diagnóstico-rápido)
+2. [Pausar Igor em runtime](#pausar-igor-em-runtime)
+3. [Pausar workflow específico](#pausar-workflow-específico)
+4. [Habilitar / desabilitar envio real](#habilitar--desabilitar-envio-real)
+5. [Configurar atendente específico (assignee_id)](#configurar-atendente-específico-assignee_id)
+6. [Trocar credencial sem reimportar workflows](#trocar-credencial-sem-reimportar-workflows)
+7. [Disparar smoke manual](#disparar-smoke-manual)
+8. [Erro em produção — primeira checagem](#erro-em-produção--primeira-checagem)
+9. [Restaurar workflow a partir do JSON canonical](#restaurar-workflow-a-partir-do-json-canonical)
+10. [Tabela `settings` — chaves operacionais](#tabela-settings--chaves-operacionais)
+11. [IDs n8n canônicos](#ids-n8n-canônicos)
 
 ---
 
 ## Diagnóstico rápido
 
-### Status global
+### Status global do health check
 ```sql
-SELECT * FROM events
+SELECT payload->>'overall_status' AS status,
+       payload->'counts' AS counts_24h,
+       payload->'services' AS services,
+       created_at
+FROM events
 WHERE event_type='health_check'
 ORDER BY created_at DESC LIMIT 1;
 ```
-
-Resultado esperado: `overall_status='healthy'`, `services` com 5 itens `status='ok'`.
+Esperado: `overall_status='healthy'`, 5 services `status='ok'`.
 
 ### Mensagens recentes
 ```sql
-SELECT m.created_at, m.role, m.sender_type, left(m.content, 80) as content_preview,
+SELECT m.created_at, m.sender_type, left(m.content, 80) AS preview,
        c.state, c.ai_enabled, c.human_locked
 FROM messages m
 JOIN conversations c ON c.id = m.conversation_id
@@ -182,8 +44,9 @@ ORDER BY m.created_at DESC LIMIT 20;
 
 ### Erros recentes
 ```sql
-SELECT created_at, payload->>'workflow_name' as wf, payload->>'last_node' as node,
-       payload->>'error_message' as err
+SELECT created_at, payload->>'workflow_name' AS wf,
+       payload->>'last_node' AS node,
+       payload->>'error_message' AS err
 FROM events
 WHERE event_type='infra_error' AND created_at > now() - interval '1 hour'
 ORDER BY created_at DESC LIMIT 20;
@@ -193,83 +56,164 @@ ORDER BY created_at DESC LIMIT 20;
 
 ## Pausar Igor em runtime
 
+Kill switch global — bloqueia TODAS as mensagens novas:
 ```sql
-UPDATE settings SET value='false' WHERE key='ai_enabled_global';
+UPDATE public.settings SET value='false'::jsonb, updated_at=now()
+WHERE key='ai_enabled_global';
 ```
-
-Efeito: IGOR_01 condition 2 bloqueia todas as mensagens novas (events('inbound_blocked', reason='ai_disabled_global')). Não interrompe execuções em andamento.
+Efeito: IGOR_01 condition 2 bloqueia, registra `events('inbound_blocked', reason='ai_disabled_global')`. Não interrompe execuções em andamento.
 
 Retomar:
 ```sql
-UPDATE settings SET value='true' WHERE key='ai_enabled_global';
+UPDATE public.settings SET value='true'::jsonb, updated_at=now()
+WHERE key='ai_enabled_global';
 ```
 
 ---
 
 ## Pausar workflow específico
 
+Para pausar só um workflow (sem afetar outros):
 ```sql
-UPDATE settings
-SET value = jsonb_set(value::jsonb, '{IGOR_01}', 'false'::jsonb)
+UPDATE public.settings
+SET value = jsonb_set(value::jsonb, '{IGOR_01}', 'false'::jsonb),
+    updated_at = now()
 WHERE key='workflows_enabled';
 ```
+Substitua `IGOR_01` por qualquer das chaves: IGOR_01..IGOR_08. Workflow respeita o gate `workflows_enabled.IGOR_XX === false` no início.
 
-Substitua `IGOR_01` pelo workflow alvo. Efeito: workflow respeita o gate `workflows_enabled.IGOR_XX === false`.
+---
+
+## Habilitar / desabilitar envio real
+
+Default seguro: `dry_run_send=true` e `allow_real_whatsapp_send=false` → Evolution `sendText` é trocado por `events('dry_run_send')`.
+
+Para habilitar envio real (cuidado — manda WhatsApp de verdade):
+```sql
+UPDATE public.settings SET value='false'::jsonb, updated_at=now() WHERE key='dry_run_send';
+UPDATE public.settings SET value='true'::jsonb, updated_at=now() WHERE key='allow_real_whatsapp_send';
+```
+
+Voltar pra dry run:
+```sql
+UPDATE public.settings SET value='true'::jsonb, updated_at=now() WHERE key='dry_run_send';
+UPDATE public.settings SET value='false'::jsonb, updated_at=now() WHERE key='allow_real_whatsapp_send';
+```
+
+Esses gates são lidos pelo node `Load Gates` no início de IGOR_03 e IGOR_05.
+
+---
+
+## Configurar atendente específico (assignee_id)
+
+Por default (`null`), handoff faz apenas team assignment. Para atribuir conversa a um atendente específico no Chatwoot:
+```sql
+UPDATE public.settings SET value='5'::jsonb, updated_at=now()
+WHERE key='chatwoot_human_assignee_id';
+```
+Substitua `5` pelo `user_id` do agente no Chatwoot. Para voltar a team-only:
+```sql
+UPDATE public.settings SET value='null'::jsonb, updated_at=now()
+WHERE key='chatwoot_human_assignee_id';
+```
 
 ---
 
 ## Trocar credencial sem reimportar workflows
 
-1. UI n8n → Credentials → encontrar credencial pelo nome (e.g., `igor_evolution_api`).
+1. UI do n8n → Credentials → encontrar pelo nome (e.g., `igor_evolution_api`).
 2. Edit → atualizar valor.
 3. Save.
 
-Todos os workflows que referenciam pelo nome são automaticamente atualizados (resolução por nome no momento da execução).
+Todos os workflows que referenciam pelo nome são automaticamente atualizados — sem re-import.
 
 ---
 
-## Reprocessar mensagem perdida
+## Disparar smoke manual
 
-Se uma mensagem chegou mas não foi processada (e.g., n8n estava down):
+Usar `IGOR_TEST_Smoke_Trigger` (id `G8pMteuirc2yZgq5`):
 
-1. Capture o payload Evolution do log Chatwoot.
-2. Use `curl -X POST $N8N_BASE_URL/webhook/igor/inbound -d @payload.json`.
+1. Configurar telefone do operador (uma vez):
+   ```sql
+   UPDATE public.settings SET value='"5562998621000"'::jsonb, updated_at=now()
+   WHERE key='smoke_test_phone';
+   ```
+   Formato: `55+DDD+9digits`, sem `+` ou espaços (13 chars).
+
+2. Abrir `IGOR_TEST_Smoke_Trigger` no n8n UI → botão **Execute Workflow**.
+
+3. WhatsApp do operador recebe mensagem em segundos. Responder via WhatsApp dispara IGOR_01 via webhook Evolution.
 
 ---
 
-## Conta sob ataque / opt-out em massa
+## Erro em produção — primeira checagem
 
 ```sql
--- Pausar global
-UPDATE settings SET value='false' WHERE key='ai_enabled_global';
+-- 1. Há erros recentes?
+SELECT count(*) FROM events WHERE event_type='infra_error' AND created_at > now() - interval '15 minutes';
 
--- Marcar contas suspeitas
-UPDATE contacts SET do_not_contact=true
-WHERE phone IN (SELECT phone FROM contacts_under_attack);
+-- 2. Qual workflow está falhando?
+SELECT payload->>'workflow_name' AS wf, count(*)
+FROM events WHERE event_type='infra_error' AND created_at > now() - interval '1 hour'
+GROUP BY 1 ORDER BY 2 DESC;
 
--- Verificar atacks recent
-SELECT count(*) FROM events
-WHERE event_type='opt_out' AND created_at > now() - interval '1 hour';
+-- 3. Detalhes do último erro
+SELECT payload->>'workflow_name' AS wf, payload->>'last_node' AS node,
+       payload->>'error_message' AS err, created_at
+FROM events WHERE event_type='infra_error'
+ORDER BY created_at DESC LIMIT 5;
 ```
+
+Se identificar workflow problemático, pausar via section "Pausar workflow específico" enquanto investiga.
 
 ---
 
-## Restaurar backup de workflows
+## Restaurar workflow a partir do JSON canonical
 
-JSONs canonical em `n8n/workflows/IGOR_*.json` são source-of-truth. Para restaurar:
+JSONs em `n8n/workflows/IGOR_*.json` são source-of-truth. Para restaurar via REST:
 
 ```bash
-set -a; source .env; set +a
-for f in n8n/workflows/IGOR_*.json; do
-  ID=$(jq -r .id "$f")
-  curl -X PUT -H "X-N8N-API-KEY: $N8N_API_KEY" -H "Content-Type: application/json" \
-    "$N8N_BASE_URL/api/v1/workflows/$ID" --data-binary "@$f"
-done
+# Usar credenciais do .claude/CREDENCIAIS.md — substituir N8N_BASE_URL e N8N_API_KEY pelos valores reais
+WF_ID="nC6ZhCVNn1fQiKfB"
+curl -X PUT \
+  -H "X-N8N-API-KEY: $N8N_API_KEY" \
+  -H "Content-Type: application/json" \
+  "$N8N_BASE_URL/api/v1/workflows/$WF_ID" \
+  --data-binary @n8n/workflows/IGOR_01_Inbound_AfterHours.json
 ```
+
+Ou via MCP (preferido): `mcp__n8n-mcp__update_workflow` com SDK code.
 
 ---
 
-## Workflow IDs canônicos (atual)
+## Tabela `settings` — chaves operacionais
+
+```sql
+SELECT key, value FROM public.settings ORDER BY key;
+```
+
+| Key | Tipo | Default | Uso |
+|-----|------|---------|-----|
+| `ai_enabled_global` | bool | true | kill switch global (IGOR_01 cond 2) |
+| `workflows_enabled` | jsonb obj | IGOR_01-08 true | flag por workflow (IGOR_01 cond 3) |
+| `after_hours_start` / `_end` | string `HH:MM` | "18:30" / "07:30" | janela horária (IGOR_01 cond 8) |
+| `timezone` | string IANA | "America/Sao_Paulo" | timezone do check de horário |
+| `holidays` | jsonb array `YYYY-MM-DD` | `[]` | feriados (IGOR_01 cond 9) |
+| `holiday_policy` | enum | `after_hours_force` | comportamento em feriado |
+| `dry_run_send` | bool | true | bloqueia Evolution sendText (IGOR_03/05) |
+| `allow_real_whatsapp_send` | bool | false | toggle prod/test send |
+| `chatwoot_human_assignee_id` | int OR null | null | atendente específico (null = team-only — IGOR_05) |
+| `human_team_id` | int | 1 | team Chatwoot p/ handoff |
+| `human_inbox_id` | int | 1 | inbox Chatwoot principal |
+| `human_inbox_identifier` | string | "vRrf8MeDTe9DsH11RB3ZRCug" | identifier API channel |
+| `smoke_test_phone` | string OR null | null | telefone do operador p/ IGOR_TEST_Smoke_Trigger |
+| `smoke_test_message` | string | (texto default) | mensagem do smoke |
+| `do_not_contact_keywords` | jsonb array | (lista PT-BR) | palavras opt-out (futuro) |
+| `campaign_optout_threshold` | jsonb obj | `{window_size:20, max_optouts:3}` | auto-pausa campanha |
+
+---
+
+## IDs n8n canônicos
 
 | Workflow | n8n ID |
 |----------|--------|
@@ -283,3 +227,13 @@ done
 | IGOR_08_Health_Check | `cDpDA1QdIH9wHAlN` |
 | IGOR_AUX_save_lead_partial | `hRogDlGsgQxGwnD8` |
 | IGOR_AUX_update_conversation_state | `mFuRPrGGt7yWVqEw` |
+| IGOR_TEST_Smoke_Trigger | `G8pMteuirc2yZgq5` |
+
+### Credenciais n8n por nome
+| Nome | ID | Tipo |
+|------|-----|------|
+| `igor_chatwoot_api` | `x8StLhAFnYjQxUFg` | httpHeaderAuth (`api_access_token`) |
+| `igor_evolution_api` | `DDhbwLsNclqTA18X` | httpHeaderAuth (`apikey`) |
+| `igor_openai` | `LlVkZBRsy5tm6FjJ` | openAiApi (Bearer) |
+| `igor_supabase_postgres` | `Z7DeBop4nK4JlIXO` | postgres (session pooler) |
+| `igor_redis_embedded` | `ayVMY7Njm6ecLLuc` | redis (local) |

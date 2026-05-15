@@ -1,8 +1,10 @@
 # IMPLEMENTATION_PLAN — Instituto Dr. Igor
 
-Versão: 0.1 (Fase 0 — auditoria e plano). Próxima revisão: após aprovação para Fase 2 (Supabase).
+> Versão: 0.3 — pós Fase C. Inbound (IGOR_01-08 + AUX) construído e ativo. Falta Frente Campanha (IGOR_10/12/13; IGOR_09 é script Python; IGOR_11 deferido inline).
+>
+> Este documento foca em **contratos por workflow** e schema. Para arquitetura geral, leia `docs/ARCHITECTURE.md`. Para estado vivo, `docs/VALIDATION_REPORT.md`.
 
-Este documento é o plano operacional. Fonte funcional: `docs/logica-fluxo-igor-receptivo-fora-expediente.md` e `docs/logica-fluxo-igor-agente-ativo-promocao.md`. Em caso de conflito entre este plano e os documentos de lógica, os documentos prevalecem (exceto em nomes canônicos dos workflows, fixados no `AGENTS.md`).
+Fonte funcional: `docs/logica-fluxo-igor-receptivo-fora-expediente.md` e `docs/logica-fluxo-igor-agente-ativo-promocao.md`. Em caso de conflito entre este plano e os documentos de lógica, os documentos prevalecem (exceto em nomes canônicos dos workflows, fixados no `AGENTS.md`).
 
 ---
 

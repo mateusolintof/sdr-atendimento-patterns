@@ -3,7 +3,7 @@
 ## Identificação
 - **n8n_id**: `xpXRENR7Hoo2W5p3`
 - **n8n URL**: `https://n8n.almaconvert.com.br/workflow/xpXRENR7Hoo2W5p3`
-- **Estado inicial**: `active: false` (ativação manual no UI após Fase C).
+- **Estado**: `active: true` (ativado em 2026-05-15 via MCP publish_workflow).
 - **Tipo**: webhook receiver (Chatwoot → INSERT messages + bloqueio determinístico de IA).
 
 ## Contrato literal (de `docs/IMPLEMENTATION_PLAN.md:173-183`)
@@ -31,11 +31,9 @@ Na versão anterior a chamada IGOR_04 com label `atendimento_humano` estava
 
 - `executeWorkflow` chamando IGOR_04 (`AJF7dhGrqJEXMLqz`) com `labels_to_add: ['atendimento_humano', 'ai_disabled']` E `custom_attributes.conversation: {automation_state: 'human_assigned', lead_status: 'humano_em_atendimento', taken_at}`.
 
-Documentado em `docs/superpowers/debt/2026-05-15-simplifications-to-revert.md` §5.
-
 ## Gates aplicados
 - `errorWorkflow: ZrsbaSTlW5bqMEaS` (IGOR_07_Error_Logger) — **persistido no JSON canônico** (`settings.errorWorkflow`). Aplicado via REST API PUT após `create_workflow_from_code`.
-- `active: false` por padrão — **persistido no JSON canônico**. Ativação manual no UI após validação em Fase C + autorização explícita do usuário.
+- `active: true` (ativado em 2026-05-15).
 - `tags: ['igor', 'inbound', 'webhook', 'fase-b-rebuild']` — **persistido no JSON canônico**. Tag `webhook` criada via REST API quando ausente.
 - `availableInMCP: true` — habilita gestão via n8n MCP (`archive_workflow`, `get_workflow_details` etc).
 - `executionOrder: 'v1'` — n8n moderno.
@@ -155,8 +153,7 @@ human_assumed; com `continueOnFail`, mesmo se IGOR_04 explodir, o
 UPDATE no Postgres, e a label no Chatwoot é best-effort observability).
 
 ## Fixtures e asserts
-- 4 fixtures em `fixtures/IGOR_06_*.json`:
-  - `IGOR_06_message_created_incoming.json` — lead falando; `inbound_noop`.
+-   - `IGOR_06_message_created_incoming.json` — lead falando; `inbound_noop`.
   - `IGOR_06_message_created_outgoing_human.json` — atendente humana; `human_takeover`.
   - `IGOR_06_message_created_outgoing_bot.json` — Igor IA; `bot_noop` (não trava).
   - `IGOR_06_event_conversation_updated.json` — event != message_created; filter NoOp.
@@ -190,5 +187,5 @@ UPDATE no Postgres, e a label no Chatwoot é best-effort observability).
 - HUMAN_TAKEOVER chamado APENAS para outgoing+user. ✓
 - Chamada IGOR_04 com labels EXATAS `['atendimento_humano','ai_disabled']` + `custom_attributes.conversation`. ✓ (debt fix)
 - UPDATE conversations SET human_locked=true, ai_enabled=false, state='human_assigned'. ✓
-- errorWorkflow + tags + active=false persistidos no JSON canônico pós-PATCH (linhas 7, 786-788, 824/836/842). ✓
+- errorWorkflow + tags persistidos no JSON canônico. active=true (publicado). ✓
 - SOURCE OF TRUTH NOTICE no SDK. ✓

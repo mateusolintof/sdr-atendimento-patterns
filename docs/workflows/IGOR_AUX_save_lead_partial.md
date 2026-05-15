@@ -43,7 +43,7 @@ UPSERT idempotente:
 
 ## Como testar
 ```bash
-bash scripts/test-workflow.sh IGOR_AUX_save_lead_partial fixtures/aux-save-lead.json
+bash scripts/test-workflow.sh <workflow_id>
 ```
 
 Esperado: 3 asserts ✓ (events.lead_saved_partial, leads UPSERT, JOIN

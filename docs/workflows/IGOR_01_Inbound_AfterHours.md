@@ -1,7 +1,7 @@
 # IGOR_01_Inbound_AfterHours — audit & runbook
 
 **Workflow id n8n**: `nC6ZhCVNn1fQiKfB`
-**Active**: `false` (segurança Fase B — só ativar após Fase C smoke completa).
+**Active**: `true` (ativado via mcp__n8n-mcp__publish_workflow em 2026-05-15).
 **ErrorWorkflow**: `ZrsbaSTlW5bqMEaS` (IGOR_07_Error_Logger).
 **Tags**: `igor`, `inbound`, `webhook`, `router`, `fase-b-rebuild`.
 **Webhook path**: `POST /webhook/igor/inbound`.
@@ -10,14 +10,14 @@
 
 ## Reconstrução NO SIMPLIFICATIONS
 
-Este workflow foi reconstruído (Fase B Inbound Rebuild — Task 6 do plano `docs/superpowers/plans/2026-05-15-fase-b-inbound-rebuild.md`) substituindo o IGOR_01 simplificado anterior (debt commit `3a17bbc`). A reconstrução implementa:
+Workflow reconstruído sob a regra NO SIMPLIFICATIONS após reset (Fase A revertou versão anterior simplificada). Implementa:
 
 - 12 condições determinísticas EM ORDEM EXATA.
 - Redis lock+batching ASX-style (INCR atômico com TTL como substituto NX-EX, RPUSH+marker EXPIRE para batch fragmentado).
 - Calls reais para `IGOR_02_Media_Normalizer` (`GBmG9WZzW2p8Nn6f`) e `IGOR_04_Tool_Labels_Attributes` (`AJF7dhGrqJEXMLqz`).
 - Placeholders documentados para `IGOR_03_Agent_AfterHours` (Wave 4) e `IGOR_12_Campaign_Inbound_Handler` (fase Campanha).
 
-## 58 nodes — fluxo
+## 59 nodes — fluxo
 
 ```
 Evolution Webhook
@@ -119,7 +119,7 @@ Limitação conhecida (vs SET NX EX exato): se INCR é registrado mas EXPIRE fal
 
 ## Fixtures
 
-`fixtures/IGOR_01_*.json` — 10 cenários cobrindo cada bloqueio + happy paths text e audio + batch fragment.
+Smoke via mensagem real no WhatsApp (ver `docs/RUNBOOK.md` seção "Disparar smoke manual").
 
 ## Asserts SQL
 
@@ -135,7 +135,7 @@ Limitação conhecida (vs SET NX EX exato): se INCR é registrado mas EXPIRE fal
 - **IGOR_12 placeholder**: leads de campanha (status=sent/delivered/replied/interested) são identificados e roteados via events, mas não recebem follow-up automatizado. Documentar em runbook que essas conversas hoje seguem para humano (Chatwoot) sem IA até IGOR_12 existir.
 - **Redis race window 3s**: para usuários muito rápidos enviando 3+ mensagens em <3s, alguns fragmentos podem chegar na lista batch após o LRANGE do holder. Esses ficam órfãos (limpos no DEL batch do holder, mas se chegarem após o DEL, ficam na lista até TTL 60s expirar). Mitigação: WhatsApp já tem rate-limit natural >1s entre mensagens; IGOR_08 monitora orphans.
 - **Holiday policy P1**: implementação atual sempre força `after_hours_force` para feriados. Mudança de policy (e.g. P2='block_completely') requer atualização de Check Business Hours + Holiday node.
-- **Webhook ativação**: workflow está `active=false` por segurança. Após ativar `active=true`, a Evolution API ainda precisa ser apontada para `/webhook/igor/inbound` — vide RUNBOOK.
+- **Webhook ativação**: workflow `active=true`. Evolution está apontada para `/webhook/igor/inbound` na instância `convert-teste` (vide ARCHITECTURE.md §1).
 
 ## Como ativar (Fase D / produção)
 

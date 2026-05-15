@@ -1,6 +1,6 @@
 # ARCHITECTURE — Instituto Dr. Igor (Source of Truth)
 
-> Este arquivo é a **fonte de verdade arquitetural** do projeto Igor. Agentes revisores e novos agentes devem ler ESTE arquivo primeiro antes de tocar em código ou workflows. Discrepâncias entre código atual e este documento → corrigir o código (não o doc), ou abrir débito explícito em `docs/superpowers/debt/`.
+> Este arquivo é a **fonte de verdade arquitetural** do projeto Igor. Agentes revisores e novos agentes devem ler ESTE arquivo primeiro antes de tocar em código ou workflows. Discrepâncias entre código atual e este documento → corrigir o código (não o doc) ou atualizar este arquivo.
 >
 > Versão: 2026-05-15 (Fase C wiring + Smoke trigger).
 
@@ -369,7 +369,7 @@ NÃO é importado em containers Portainer. n8n bloqueia `$env` access por `N8N_B
 ## 7. Princípios arquiteturais inegociáveis
 
 1. **Harness Engineering**: regras determinísticas em Code/IF/Switch/SQL/Redis-locks. LLM apenas para resposta conversacional + transcrição + visão + classificação semântica.
-2. **NO SIMPLIFICATIONS**: spec do `docs/logica-fluxo-igor-*.md` é literal. Se faltar info, perguntar — nunca decidir simplificação sozinho. Vide débito histórico em `docs/superpowers/debt/`.
+2. **NO SIMPLIFICATIONS**: spec do `docs/logica-fluxo-igor-*.md` é literal. Se faltar info, perguntar — nunca decidir simplificação sozinho.
 3. **Workflow inativo por padrão** na construção: TODOS os IGOR_* nascem com `active: false`. Ativação após smoke verde via UI ou `mcp__n8n-mcp__publish_workflow`.
 4. **errorWorkflow universal**: cada workflow tem `settings.errorWorkflow = ZrsbaSTlW5bqMEaS` (IGOR_07_Error_Logger).
 5. **Gates de segurança** em `settings`: `dry_run_send=true` (default) bloqueia Evolution sendText. `allow_real_whatsapp_send=false` (default).
@@ -449,19 +449,15 @@ Ao revisar um workflow novo/modificado:
   - `docs/logica-fluxo-igor-agente-ativo-promocao.md` — spec campanha
 - **Plano operacional**:
   - `docs/IMPLEMENTATION_PLAN.md` (§2 catálogo workflows, §3 contratos, §5 schema DDL, §7 credentials, §10 smoke tests, §13 templates)
-  - `docs/WORKFLOW_PLAN.md` (Fase 4 ordem de construção)
   - `docs/RUNBOOK.md` (smoke runbook + diagnostics)
 - **Status / pendências**:
   - `docs/VALIDATION_REPORT.md` (status atual de cada workflow)
-  - `docs/superpowers/debt/2026-05-15-simplifications-to-revert.md` (débito histórico — TODO resolvido)
 - **Memórias do agente** (`~/.claude/projects/.../memory/MEMORY.md`):
   - `feedback_nunca_simplificar_e_asx_e_referencia.md`
   - `feedback_env_file_is_reference_only.md` ← regra `$env` proibido
   - `feedback_asx_e_apenas_referencia_tecnica.md`
   - `project_decisoes_fase_0.md`
 - **Plans**:
-  - `docs/superpowers/plans/2026-05-15-fase-b-inbound-rebuild.md`
-  - `~/.claude/plans/elegant-tinkering-chipmunk.md` (Fase C integração)
 
 ---
 

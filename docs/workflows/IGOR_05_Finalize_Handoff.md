@@ -14,7 +14,7 @@
 
 ## Função
 
-Callable invocado por IGOR_03 (after_hours agente) e IGOR_13 (campaign agente) para finalizar o handoff IA → humano. Substitui versão revertida (`54af750`) que tinha gaps documentados em `docs/superpowers/debt/2026-05-15-simplifications-to-revert.md` §4.
+Callable invocado por IGOR_03 (after_hours agente) e IGOR_13 (campaign agente — não construído) para finalizar o handoff IA → humano. Reconstruído NO SIMPLIFICATIONS após reset.
 
 Sequência **OBRIGATÓRIA** (NO SIMPLIFICATIONS — replica fielmente contrato em `docs/IMPLEMENTATION_PLAN.md` linhas 156-171 e spec §13/§15 em `docs/logica-fluxo-igor-receptivo-fora-expediente.md`):
 
