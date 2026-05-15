@@ -1,0 +1,12 @@
+{
+  "chatwoot_conversation_id": 1,
+  "chatwoot_contact_id": null,
+  "labels_to_add": ["ai_after_hours", "fora_expediente"],
+  "labels_to_remove": [],
+  "custom_attributes": {
+    "conversation": {"automation_state": "ai_after_hours"},
+    "contact": {}
+  },
+  "test_run_id": "{{TEST_RUN_ID}}",
+  "_skip_chatwoot_calls": true
+}
