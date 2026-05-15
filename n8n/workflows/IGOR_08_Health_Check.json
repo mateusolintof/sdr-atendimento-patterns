@@ -257,6 +257,7 @@
       "name": "Supabase Ping",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
+      "onError": "continueRegularOutput",
       "position": [
         448,
         768
@@ -295,6 +296,7 @@
       "name": "Counts 24h",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
+      "onError": "continueRegularOutput",
       "position": [
         1120,
         192
@@ -333,6 +335,7 @@
       "name": "Race Detection",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
+      "onError": "continueRegularOutput",
       "position": [
         1120,
         384
@@ -357,6 +360,7 @@
       "name": "Orphan Batches",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
+      "onError": "continueRegularOutput",
       "position": [
         1120,
         576
