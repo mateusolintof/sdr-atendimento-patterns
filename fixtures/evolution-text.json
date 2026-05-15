@@ -1,7 +1,0 @@
-{
-  "phone": "5562999999999",
-  "msgId": "test-text-001",
-  "messageType": "text",
-  "text": "Oi, queria saber sobre consulta. TEST {{TEST_RUN_ID}}",
-  "test_run_id": "{{TEST_RUN_ID}}"
-}
