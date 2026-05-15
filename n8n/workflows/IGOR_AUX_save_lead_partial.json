@@ -1,0 +1,162 @@
+{
+  "name": "IGOR_AUX_save_lead_partial",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {"name": "contact_id", "type": "string"},
+            {"name": "phone", "type": "string"},
+            {"name": "source", "type": "string"},
+            {"name": "external_id", "type": "string"},
+            {"name": "objective", "type": "string"},
+            {"name": "city", "type": "string"},
+            {"name": "callback_period", "type": "string"},
+            {"name": "kommo_data", "type": "object"},
+            {"name": "test_run_id", "type": "string"}
+          ]
+        }
+      },
+      "id": "execute-trigger-node",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const contactId = (j.contact_id === undefined || j.contact_id === null || j.contact_id === '') ? null : String(j.contact_id);\n  const phone = (j.phone === undefined || j.phone === null) ? null : String(j.phone);\n  const source = (j.source === undefined || j.source === null) ? null : String(j.source);\n  const externalId = (j.external_id === undefined || j.external_id === null) ? null : String(j.external_id);\n  const objective = (j.objective === undefined || j.objective === null) ? null : String(j.objective);\n  const city = (j.city === undefined || j.city === null) ? null : String(j.city);\n  const callbackPeriod = (j.callback_period === undefined || j.callback_period === null) ? null : String(j.callback_period);\n  let kommoData = j.kommo_data;\n  if (kommoData === undefined || kommoData === null) kommoData = {};\n  if (typeof kommoData === 'string') {\n    try { kommoData = JSON.parse(kommoData); } catch (e) { kommoData = {}; }\n  }\n  if (typeof kommoData !== 'object' || Array.isArray(kommoData)) kommoData = {};\n  const testRunId = (j.test_run_id === undefined || j.test_run_id === null) ? null : String(j.test_run_id);\n  return {\n    json: {\n      contact_id: contactId,\n      phone,\n      source,\n      external_id: externalId,\n      objective,\n      city,\n      callback_period: callbackPeriod,\n      kommo_data: kommoData,\n      kommo_data_json: JSON.stringify(kommoData),\n      test_run_id: testRunId\n    }\n  };\n});"
+      },
+      "id": "validate-payload-node",
+      "name": "Validate Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH ct AS (\n  INSERT INTO public.contacts (phone, name)\n  VALUES ($1, NULL)\n  ON CONFLICT (phone) DO UPDATE SET updated_at = now()\n  RETURNING id\n),\nlead_upsert AS (\n  INSERT INTO public.leads (contact_id, source, external_id, objective, city, callback_period, kommo_data)\n  SELECT\n    COALESCE(NULLIF($2, '')::uuid, ct.id),\n    $3, $4, $5, $6, $7, $8::jsonb\n  FROM ct\n  ON CONFLICT (source, external_id) DO UPDATE SET\n    objective = EXCLUDED.objective,\n    city = EXCLUDED.city,\n    callback_period = EXCLUDED.callback_period,\n    kommo_data = EXCLUDED.kommo_data,\n    updated_at = now()\n  RETURNING id, contact_id\n)\nSELECT id AS lead_id, contact_id FROM lead_upsert;",
+        "options": {
+          "queryReplacement": "={{ [$json.phone, $json.contact_id || '', $json.source, $json.external_id, $json.objective, $json.city, $json.callback_period, $json.kommo_data_json] }}"
+        }
+      },
+      "id": "upsert-contact-lead-node",
+      "name": "Upsert Contact + Lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [440, 0],
+      "credentials": {
+        "postgres": {
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const validated = $('Validate Payload').first().json;\nconst items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const leadId = j.lead_id || null;\n  const contactId = j.contact_id || null;\n  return {\n    json: {\n      lead_id: leadId,\n      contact_id: contactId,\n      source: validated.source,\n      external_id: validated.external_id,\n      test_run_id: validated.test_run_id,\n      event_payload_json: JSON.stringify({\n        lead_id: leadId,\n        contact_id: contactId,\n        source: validated.source,\n        external_id: validated.external_id,\n        test_run_id: validated.test_run_id\n      })\n    }\n  };\n});"
+      },
+      "id": "shape-event-node",
+      "name": "Shape Event Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, workflow_name, payload)\nVALUES ('lead_saved_partial', 'IGOR_AUX_save_lead_partial', $1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ [$json.event_payload_json] }}"
+        }
+      },
+      "id": "log-event-node",
+      "name": "Log Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [880, 0],
+      "credentials": {
+        "postgres": {
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "success-flag",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "lead-id-out",
+              "name": "lead_id",
+              "value": "={{ $('Shape Event Payload').first().json.lead_id }}",
+              "type": "string"
+            },
+            {
+              "id": "test-run-id-out",
+              "name": "test_run_id",
+              "value": "={{ $('Shape Event Payload').first().json.test_run_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "respond-success-node",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1100, 0]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {"node": "Validate Payload", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Validate Payload": {
+      "main": [
+        [
+          {"node": "Upsert Contact + Lead", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Upsert Contact + Lead": {
+      "main": [
+        [
+          {"node": "Shape Event Payload", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Shape Event Payload": {
+      "main": [
+        [
+          {"node": "Log Event", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Log Event": {
+      "main": [
+        [
+          {"node": "Success Response", "type": "main", "index": 0}
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
+  }
+}
