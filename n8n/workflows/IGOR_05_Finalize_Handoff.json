@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-15T14:22:51.341Z",
+  "updatedAt": "2026-05-15T15:04:57.535Z",
   "createdAt": "2026-05-15T04:32:26.579Z",
   "id": "N31QcdrNVE5AOZdu",
   "name": "IGOR_05_Finalize_Handoff",
@@ -248,16 +248,7 @@
         "url": "=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $('Validate Payload').first().json.chatwoot_conversation_id }}/messages",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
         "specifyHeaders": "keypair",
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
@@ -272,7 +263,13 @@
           "timeout": 15000
         }
       },
-      "executeOnce": true
+      "executeOnce": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "x8StLhAFnYjQxUFg",
+          "name": "igor_chatwoot_api"
+        }
+      }
     },
     {
       "id": "b8e365a7-f795-459e-b7c1-c1bcdde9424d",
@@ -288,16 +285,7 @@
         "url": "=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $('Validate Payload').first().json.chatwoot_conversation_id }}/assignments",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
         "specifyHeaders": "keypair",
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
@@ -312,7 +300,13 @@
           "timeout": 15000
         }
       },
-      "executeOnce": true
+      "executeOnce": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "x8StLhAFnYjQxUFg",
+          "name": "igor_chatwoot_api"
+        }
+      }
     },
     {
       "id": "658afa7c-8d8a-4e38-b577-0febcccc1e5e",
@@ -360,16 +354,7 @@
         "url": "=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $('Validate Payload').first().json.chatwoot_conversation_id }}/assignments",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
         "specifyHeaders": "keypair",
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
@@ -384,7 +369,13 @@
           "timeout": 15000
         }
       },
-      "executeOnce": true
+      "executeOnce": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "x8StLhAFnYjQxUFg",
+          "name": "igor_chatwoot_api"
+        }
+      }
     },
     {
       "id": "7a29b8e7-b6ea-4420-90eb-21424b975d6c",
@@ -1037,9 +1028,9 @@
     "builderVariant": "mcp"
   },
   "pinData": {},
-  "versionId": "91ffea54-40f7-45f6-b20d-5408e87a270b",
+  "versionId": "56e6e960-98c6-4e2d-a817-8db11233b6fe",
   "activeVersionId": null,
-  "versionCounter": 8,
+  "versionCounter": 12,
   "triggerCount": 0,
   "shared": [
     {
