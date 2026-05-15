@@ -1,0 +1,10 @@
+{
+  "phone": "5562900000002",
+  "chatwoot_conversation_id": 9001,
+  "chatwoot_inbox_id": 1,
+  "state": "ai_after_hours",
+  "ai_enabled": true,
+  "human_locked": false,
+  "current_flow": "after_hours",
+  "test_run_id": "{{TEST_RUN_ID}}"
+}
