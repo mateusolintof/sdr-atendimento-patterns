@@ -1,0 +1,13 @@
+{
+  "chatwoot_conversation_id": "fixture-conv-attrs",
+  "labels_to_add": [],
+  "labels_to_remove": [],
+  "custom_attributes": {
+    "conversation": {
+      "automation_state": "collecting_callback_time",
+      "lead_status": "qualificacao_rapida"
+    },
+    "contact": {}
+  },
+  "test_run_id": "IGOR_04_FIXTURE_attrs_conversation_only"
+}

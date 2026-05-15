@@ -1,0 +1,10 @@
+{
+  "chatwoot_conversation_id": "fixture-conv-labels",
+  "labels_to_add": ["handoff_done", "ai_disabled"],
+  "labels_to_remove": ["qualificacao_rapida"],
+  "custom_attributes": {
+    "conversation": {},
+    "contact": {}
+  },
+  "test_run_id": "IGOR_04_FIXTURE_labels_only"
+}
