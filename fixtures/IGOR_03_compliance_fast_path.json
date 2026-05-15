@@ -1,0 +1,16 @@
+{
+  "phone": "5511900000302",
+  "msgId": "IGOR_03_compliance_fast_path_msg",
+  "chatwoot_conversation_id": "9302",
+  "chatwoot_contact_id": "8302",
+  "normalized_text": "[Imagem recebida — descricao: laudo medico com nome do paciente, resultado de exame e selo de laboratorio.]",
+  "safety_flags": {
+    "clinical": true,
+    "sensitive_image": true,
+    "payment_proof": false
+  },
+  "should_handoff": true,
+  "handoff_reason": "documento_clinico_sensivel",
+  "fragments_count": 1,
+  "test_run_id": "IGOR_03_FIXTURE_compliance_fast_path"
+}

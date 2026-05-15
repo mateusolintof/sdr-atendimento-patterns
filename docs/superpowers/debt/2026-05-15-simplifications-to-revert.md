@@ -103,22 +103,26 @@ Em briefs de subagentes (T3b, T3c, T4a, T5, T6a, T6b), eu (agente orquestrador) 
 
 **Impacto**: humano respondeu na conversa, IA trava (✓), mas label `atendimento_humano` não aparece — atendentes não veem o estado da conversa no painel Chatwoot.
 
-### 6. IGOR_03_Agent_AfterHours — commit `00f117a`
+### 6. IGOR_03_Agent_AfterHours — commit `00f117a` — ✅ RESOLVIDO (2026-05-15 Fase B-6, novo workflow `iQCVbe1P8dC0vhay`)
 
 **Contrato esperado** (`IMPLEMENTATION_PLAN.md §2 IGOR_03`):
 - LangChain Agent + Postgres Chat Memory + 4 toolWorkflow tools ✅ (estruturalmente)
 - System prompt PT-BR completo ✅
 - IF compliance fast-path ✅
-- Fluxo conversacional completo: saúda → coleta nome → coleta objetivo → coleta callback → chama trigger_handoff
-- Reply path: format AI output → split → presence composing → send WhatsApp (gated por `ALLOW_REAL_WHATSAPP_SEND`) → wait 2s → log
+- Fluxo conversacional completo: saúda → coleta nome → coleta objetivo → coleta callback → chama trigger_handoff ✅
+- Reply path: format AI output → split → presence composing → send WhatsApp (gated por `ALLOW_REAL_WHATSAPP_SEND`) → wait 2s → log ✅
 
-**O que foi entregue**:
-- ✅ Estrutura LangChain.
-- ✅ Compliance fast-path determinístico.
-- ❓ **Happy path conversacional nunca foi testado green** — só o compliance path foi validado. Não sei se Alice consegue conversar, coletar info, e finalizar handoff de fato.
-- ❌ **Sem reply path estruturado** (split → presence → send com gate `ALLOW_REAL_WHATSAPP_SEND`).
+**O que foi entregue na reconstrução Fase B-6**:
+- ✅ LangChain agent `gpt-5.4-mini` com Postgres Chat Memory (sessionKey=`after_hours_{phone}`, ctx 25) e 4 tools (set_label_and_attr → IGOR_04, save_lead_partial → AUX, update_conversation_state → AUX, request_handoff → IGOR_05).
+- ✅ Compliance fast-path: IF `should_handoff || safety_flags.{clinical|sensitive_image|payment_proof}` → log + executeWorkflow IGOR_05 direto.
+- ✅ System prompt PT-BR LITERAL (~4500 chars com acentos preservados, cobrindo persona Alice + personalidade + conduta obrigatória/proibida + 4 campos + sequência conversacional + condicionais + quando chamar cada tool + formato de resposta).
+- ✅ Reply path estruturado: Format AI Output (split por `\n\n` ou `||` → array de até 4 mensagens) → SplitOut → SplitInBatches (batchSize=1) → Presence Composing (Evolution sendPresence com delay clampado) → IF send-gate → (real) Evolution sendText + events('whatsapp_sent') | (dry) events('dry_run_send') → Wait 2s → loop back.
+- ✅ events emitidos: after_hours_started, agent_response, agent_routed_to_handoff, whatsapp_sent, dry_run_send. handoff_complete emitido via IGOR_05 down-call.
+- ✅ 7 fixtures + asserts SQL + expected.md cobrindo cada branch.
+- ✅ SOURCE OF TRUTH NOTICE no SDK + JSON canonical exportado pós-PATCH (settings.errorWorkflow=IGOR_07, executionOrder=v1, tags=[igor, inbound, agent, langchain, fase-b-rebuild]).
+- ⚠️ `igor_evolution_api` credential AINDA AUSENTE em staging — send_gate default seguro (`IGOR_DRY_RUN=true` ou `ALLOW_REAL_WHATSAPP_SEND=false`) evita falha. Documentado em `docs/workflows/IGOR_03_Agent_AfterHours.md §Credenciais`. Não bloqueia a reconstrução; bloqueia ativação real.
 
-**Impacto**: workflow técnicamente importado, mas funcionalmente não validado. Não sei se cumpre o fluxo desenhado.
+**Validação pendente**: smoke tests integrados Fase C com cada uma das 7 fixtures + flow review subagent.
 
 ## Workflows que **não** têm dívida (mas precisam auditoria)
 

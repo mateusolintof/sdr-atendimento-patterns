@@ -1,0 +1,16 @@
+{
+  "phone": "5511900000303",
+  "msgId": "IGOR_03_collecting_name_response_msg",
+  "chatwoot_conversation_id": "9303",
+  "chatwoot_contact_id": "8303",
+  "normalized_text": "Meu nome é Ana Carolina",
+  "safety_flags": {
+    "clinical": false,
+    "sensitive_image": false,
+    "payment_proof": false
+  },
+  "should_handoff": false,
+  "handoff_reason": "",
+  "fragments_count": 1,
+  "test_run_id": "IGOR_03_FIXTURE_collecting_name_response"
+}

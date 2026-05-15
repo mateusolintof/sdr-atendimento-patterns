@@ -1,0 +1,16 @@
+{
+  "phone": "5511900000304",
+  "msgId": "IGOR_03_collecting_objective_msg",
+  "chatwoot_conversation_id": "9304",
+  "chatwoot_contact_id": "8304",
+  "normalized_text": "Quero emagrecer e entender se ele acompanha com exames de rotina",
+  "safety_flags": {
+    "clinical": false,
+    "sensitive_image": false,
+    "payment_proof": false
+  },
+  "should_handoff": false,
+  "handoff_reason": "",
+  "fragments_count": 1,
+  "test_run_id": "IGOR_03_FIXTURE_collecting_objective"
+}
