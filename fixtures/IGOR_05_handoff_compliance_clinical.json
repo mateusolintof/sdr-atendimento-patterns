@@ -1,0 +1,9 @@
+{
+  "chatwoot_conversation_id": "9003",
+  "chatwoot_contact_id": "8003",
+  "lead_id": "00000000-0000-0000-0000-000000000007",
+  "handoff_reason": "documento_clinico_sensivel",
+  "summary": "Lead enviou imagem identificada pelo normalizer como possivel documento clinico/laudo. IA NAO interpreta. Handoff imediato com flag de compliance para atendente humana revisar.",
+  "owner_flow": "after_hours",
+  "test_run_id": "IGOR_05_FIXTURE_compliance_clinical"
+}

@@ -1,0 +1,8 @@
+{
+  "chatwoot_conversation_id": "9002",
+  "chatwoot_contact_id": "8002",
+  "handoff_reason": "compliance_hold",
+  "summary": "Lead enviou mensagem que disparou regra de compliance antes do agente coletar dados estruturados. Handoff direto sem lead vinculado em leads.",
+  "owner_flow": "after_hours",
+  "test_run_id": "IGOR_05_FIXTURE_no_lead"
+}
