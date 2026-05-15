@@ -1,32 +1,11 @@
 {
+  "updatedAt": "2026-05-15T10:02:09.788Z",
+  "createdAt": "2026-05-15T04:13:29.097Z",
   "id": "cDpDA1QdIH9wHAlN",
   "name": "IGOR_08_Health_Check",
+  "description": "IGOR_08: health check schedule */10min. 5 service pings (n8n/Chatwoot/Evolution/OpenAI/Supabase) + 24h counts + race detection + orphan batches → events('health_check'). Inactive.",
   "active": false,
   "isArchived": false,
-  "description": "IGOR_08: health check schedule */10min. 5 service pings (n8n/Chatwoot/Evolution/OpenAI/Supabase) + 24h counts + race detection + orphan batches → events('health_check'). Inactive.",
-  "settings": {
-    "executionOrder": "v1",
-    "availableInMCP": true,
-    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
-  },
-  "tags": [
-    {
-      "id": "PPrCQax3p4URUSyB",
-      "name": "igor"
-    },
-    {
-      "id": "8MAvA3vn5AWx51Rw",
-      "name": "fase-b-rebuild"
-    },
-    {
-      "id": "UK4YZSCCPsPTT54F",
-      "name": "infra"
-    },
-    {
-      "id": "mi3pqUTQp2dKWqZU",
-      "name": "health-check"
-    }
-  ],
   "nodes": [
     {
       "id": "9c340178-cce3-49ea-8798-30ee7514857f",
@@ -188,6 +167,12 @@
             }
           }
         }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "DDhbwLsNclqTA18X",
+          "name": "igor_evolution_api"
+        }
       }
     },
     {
@@ -257,7 +242,6 @@
       "name": "Supabase Ping",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "onError": "continueRegularOutput",
       "position": [
         448,
         768
@@ -274,7 +258,8 @@
           "id": "Z7DeBop4nK4JlIXO",
           "name": "igor_supabase_postgres"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "id": "a84ed305-cd9b-4348-811c-0f18572edc1b",
@@ -296,7 +281,6 @@
       "name": "Counts 24h",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "onError": "continueRegularOutput",
       "position": [
         1120,
         192
@@ -314,7 +298,8 @@
           "name": "igor_supabase_postgres"
         }
       },
-      "executeOnce": true
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
     },
     {
       "id": "33c2ebee-a2fe-4fa0-ab21-eb0a5a5ea3b5",
@@ -335,7 +320,6 @@
       "name": "Race Detection",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "onError": "continueRegularOutput",
       "position": [
         1120,
         384
@@ -353,14 +337,14 @@
           "name": "igor_supabase_postgres"
         }
       },
-      "executeOnce": true
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
     },
     {
       "id": "2db15176-61fe-4d86-bb11-f6511cee38f3",
       "name": "Orphan Batches",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "onError": "continueRegularOutput",
       "position": [
         1120,
         576
@@ -376,7 +360,8 @@
           "name": "igor_redis_embedded"
         }
       },
-      "executeOnce": true
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
     },
     {
       "id": "6ddb0c8d-8aa3-4c4f-89e5-51ebace0a8bb",
@@ -726,8 +711,65 @@
       ]
     }
   },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
+  },
+  "staticData": null,
   "meta": {
     "aiBuilderAssisted": true,
     "builderVariant": "mcp"
-  }
+  },
+  "pinData": null,
+  "versionId": "b6ad2db1-c843-48f4-b4f9-c888c1ce17a4",
+  "activeVersionId": null,
+  "versionCounter": 3,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-05-15T04:13:29.097Z",
+      "createdAt": "2026-05-15T04:13:29.097Z",
+      "role": "workflow:owner",
+      "workflowId": "cDpDA1QdIH9wHAlN",
+      "projectId": "fs6cR9FbpYN5UqeV",
+      "project": {
+        "updatedAt": "2026-05-13T17:58:36.522Z",
+        "createdAt": "2026-05-13T17:55:45.649Z",
+        "id": "fs6cR9FbpYN5UqeV",
+        "name": "Mateus Ferreira <alma.lancamentos@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "a87c56dc-b486-4ae8-8d42-3490e7d3610d"
+      }
+    }
+  ],
+  "tags": [
+    {
+      "updatedAt": "2026-05-15T03:51:59.510Z",
+      "createdAt": "2026-05-15T03:51:59.510Z",
+      "id": "PPrCQax3p4URUSyB",
+      "name": "igor"
+    },
+    {
+      "updatedAt": "2026-05-15T03:52:01.867Z",
+      "createdAt": "2026-05-15T03:52:01.867Z",
+      "id": "8MAvA3vn5AWx51Rw",
+      "name": "fase-b-rebuild"
+    },
+    {
+      "updatedAt": "2026-05-15T04:13:49.483Z",
+      "createdAt": "2026-05-15T04:13:49.483Z",
+      "id": "UK4YZSCCPsPTT54F",
+      "name": "infra"
+    },
+    {
+      "updatedAt": "2026-05-15T04:13:49.978Z",
+      "createdAt": "2026-05-15T04:13:49.978Z",
+      "id": "mi3pqUTQp2dKWqZU",
+      "name": "health-check"
+    }
+  ],
+  "activeVersion": null
 }

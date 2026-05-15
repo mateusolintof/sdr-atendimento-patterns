@@ -1,6 +1,11 @@
 {
+  "updatedAt": "2026-05-15T10:02:10.645Z",
+  "createdAt": "2026-05-15T04:32:26.579Z",
+  "id": "N31QcdrNVE5AOZdu",
   "name": "IGOR_05_Finalize_Handoff",
+  "description": "IGOR_05: handoff orquestrado (UPDATE conv + UPDATE leads + IGOR_04 + private note + assign team/assignee + events + Evolution sendText gated por ALLOW_REAL_WHATSAPP_SEND+IGOR_DRY_RUN). Errors -> IGOR_07.",
   "active": false,
+  "isArchived": false,
   "nodes": [
     {
       "id": "affec48a-5fef-41f6-b8c0-4cd41c4d967f",
@@ -516,7 +521,13 @@
           "timeout": 20000
         }
       },
-      "executeOnce": true
+      "executeOnce": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "DDhbwLsNclqTA18X",
+          "name": "igor_evolution_api"
+        }
+      }
     },
     {
       "id": "f9dc9a99-dd40-4fa5-97e8-cd14a418df9f",
@@ -986,22 +997,60 @@
     "availableInMCP": true,
     "errorWorkflow": "ZrsbaSTlW5bqMEaS"
   },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "pinData": null,
+  "versionId": "ba38e2e7-50b3-468d-a3ba-b2c89c80f854",
+  "activeVersionId": null,
+  "versionCounter": 3,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-05-15T04:32:26.579Z",
+      "createdAt": "2026-05-15T04:32:26.579Z",
+      "role": "workflow:owner",
+      "workflowId": "N31QcdrNVE5AOZdu",
+      "projectId": "fs6cR9FbpYN5UqeV",
+      "project": {
+        "updatedAt": "2026-05-13T17:58:36.522Z",
+        "createdAt": "2026-05-13T17:55:45.649Z",
+        "id": "fs6cR9FbpYN5UqeV",
+        "name": "Mateus Ferreira <alma.lancamentos@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "a87c56dc-b486-4ae8-8d42-3490e7d3610d"
+      }
+    }
+  ],
   "tags": [
     {
-      "name": "igor",
-      "id": "PPrCQax3p4URUSyB"
+      "updatedAt": "2026-05-15T03:51:59.510Z",
+      "createdAt": "2026-05-15T03:51:59.510Z",
+      "id": "PPrCQax3p4URUSyB",
+      "name": "igor"
     },
     {
-      "name": "inbound",
-      "id": "Taa30aYgiV2CoA35"
+      "updatedAt": "2026-05-15T03:52:00.389Z",
+      "createdAt": "2026-05-15T03:52:00.389Z",
+      "id": "Taa30aYgiV2CoA35",
+      "name": "inbound"
     },
     {
-      "name": "fase-b-rebuild",
-      "id": "8MAvA3vn5AWx51Rw"
+      "updatedAt": "2026-05-15T03:52:01.867Z",
+      "createdAt": "2026-05-15T03:52:01.867Z",
+      "id": "8MAvA3vn5AWx51Rw",
+      "name": "fase-b-rebuild"
     },
     {
-      "name": "handoff",
-      "id": "NoAzWB8DtFpeCyRB"
+      "updatedAt": "2026-05-15T04:33:17.634Z",
+      "createdAt": "2026-05-15T04:33:17.634Z",
+      "id": "NoAzWB8DtFpeCyRB",
+      "name": "handoff"
     }
-  ]
+  ],
+  "activeVersion": null
 }
