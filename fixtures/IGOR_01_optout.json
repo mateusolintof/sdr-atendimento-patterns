@@ -1,0 +1,21 @@
+{
+  "event": "messages.upsert",
+  "instance": "dr_igor",
+  "data": {
+    "key": {
+      "id": "EVOLUTION_FIX_optout_001",
+      "remoteJid": "5511999990805@s.whatsapp.net",
+      "fromMe": false
+    },
+    "messageType": "conversation",
+    "message": { "conversation": "Não quero mais receber mensagens" },
+    "messageTimestamp": 1779892800,
+    "pushName": "Lead OptOut"
+  },
+  "chatwoot_conversation_id": 9805,
+  "chatwoot_contact_id": 5805,
+  "additional_attributes": {
+    "test_run_id": "IGOR_01_FIXTURE_optout",
+    "_setup_note": "Fase C: pré-seed contacts(phone='5511999990805', do_not_contact=true) ANTES de POSTar este fixture. Após assert: contacts row remains do_not_contact=true, conversations/messages NÃO recebem novos rows, events('inbound_blocked', reason='opt_out') é gravado, IGOR_04 chamado com labels=['optout']."
+  }
+}

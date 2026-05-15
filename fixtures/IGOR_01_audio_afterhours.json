@@ -1,0 +1,27 @@
+{
+  "event": "messages.upsert",
+  "instance": "dr_igor",
+  "data": {
+    "key": {
+      "id": "EVOLUTION_FIX_audio_afterhours_001",
+      "remoteJid": "5511999990808@s.whatsapp.net",
+      "fromMe": false
+    },
+    "messageType": "audioMessage",
+    "message": {
+      "audioMessage": {
+        "url": "https://example.com/fixture-audio-IGOR_01.ogg",
+        "mimetype": "audio/ogg; codecs=opus",
+        "fileLength": 12345
+      }
+    },
+    "messageTimestamp": 1779892800,
+    "pushName": "Lead Audio AfterHours"
+  },
+  "chatwoot_conversation_id": 9808,
+  "chatwoot_contact_id": 5808,
+  "additional_attributes": {
+    "test_run_id": "IGOR_01_FIXTURE_audio_afterhours",
+    "_setup_note": "Fixture de áudio after-hours. Após passar pelas 10 condições, IGOR_01 chama IGOR_02 (audio gpt-4o-transcribe → normalized_text=transcrição), depois IGOR_04 (label fora_expediente) e events('inbound_routed_pending_IGOR_03'). Em modo dry-run, IGOR_02 pode retornar stub."
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "event": "messages.upsert",
+  "instance": "dr_igor",
+  "data": {
+    "key": {
+      "id": "EVOLUTION_FIX_batch_lock_held_002",
+      "remoteJid": "5511999990810@s.whatsapp.net",
+      "fromMe": false
+    },
+    "messageType": "conversation",
+    "message": { "conversation": "Segundo fragmento (envie 1-2s após o primeiro fragmento abaixo)" },
+    "messageTimestamp": 1779892801,
+    "pushName": "Lead Batch"
+  },
+  "chatwoot_conversation_id": 9810,
+  "chatwoot_contact_id": 5810,
+  "additional_attributes": {
+    "test_run_id": "IGOR_01_FIXTURE_batch_lock_held",
+    "_setup_note": "Fase C: POSTar IGOR_01_text_afterhours.json (ou um fixture similar com phone=5511999990810) PRIMEIRO; em até 30s POSTar este fixture. INCR atômico → counter=2 → got_lock=false → RPUSH na batch + events('inbound_batched', reason='lock_held'). O primeiro fragmento (got_lock=true) faz wait 3s + LRANGE + DEL + merge_fragments (que incluirá o texto deste fixture na lista de fragmentos). Para teste isolado deste fixture sem dual-POST: pré-popule Redis com igor:lock:inbound:5511999990810=1 EX 30 ANTES do POST.",
+    "_first_fragment_phone": "5511999990810",
+    "_first_fragment_msg_id": "EVOLUTION_FIX_batch_lock_held_001"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "event": "messages.upsert",
+  "instance": "dr_igor",
+  "data": {
+    "key": {
+      "id": "EVOLUTION_FIX_text_afterhours_001",
+      "remoteJid": "5511999990801@s.whatsapp.net",
+      "fromMe": false
+    },
+    "messageType": "conversation",
+    "message": { "conversation": "Oi, gostaria de saber sobre tratamento de cicatriz" },
+    "messageTimestamp": 1779892800,
+    "pushName": "Lead Teste 01 AfterHours"
+  },
+  "chatwoot_conversation_id": 9801,
+  "chatwoot_contact_id": 5801,
+  "additional_attributes": { "test_run_id": "IGOR_01_FIXTURE_text_afterhours" }
+}

@@ -1,0 +1,2503 @@
+{
+  "updatedAt": "2026-05-15T05:11:41.539Z",
+  "createdAt": "2026-05-15T05:10:20.976Z",
+  "id": "nC6ZhCVNn1fQiKfB",
+  "name": "IGOR_01_Inbound_AfterHours",
+  "description": "IGOR_01: roteador inbound after-hours. 12 condições determinísticas em ordem + Redis lock+batching (INCR+EXPIRE 30 NX-EX substitute + RPUSH/LRANGE/DEL) + calls IGOR_02 (mídia)/IGOR_04 (labels). IGOR_03/IGOR_12 placeholders. Errors → IGOR_07.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "95fd89cf-3968-4c9c-8a0f-6a3b02479be8",
+      "name": "Evolution Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        864
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "igor/inbound",
+        "responseMode": "lastNode",
+        "responseData": "firstEntryJson",
+        "options": {
+          "rawBody": false,
+          "responseCode": {
+            "values": {
+              "responseCode": 200
+            }
+          }
+        }
+      },
+      "webhookId": "cbd03efb-5a23-43d3-8847-0c4e34dc65fb"
+    },
+    {
+      "id": "504f71ed-98ea-4737-a76c-a8895a85ee7e",
+      "name": "Normalize Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        864
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items=$input.all();return items.map(item=>{const root=item.json||{};const b=root.body||root;const data=b.data||{};const key=data.key||{};const message=data.message||{};const additional=b.additional_attributes||{};const msgId=key.id?String(key.id):'';const remoteJid=key.remoteJid?String(key.remoteJid):'';const rawPhone=remoteJid.split('@')[0]||'';const fromMe=key.fromMe===true;let messageType=data.messageType||'';if(messageType==='conversation'||messageType==='extendedTextMessage')messageType='text';else if(messageType==='audioMessage'||messageType==='pttMessage')messageType='audio';else if(messageType==='imageMessage')messageType='image';else if(messageType==='documentMessage'||messageType==='documentWithCaptionMessage')messageType='document';else if(messageType==='videoMessage')messageType='video';else if(!messageType)messageType='unknown';let text='';let caption='';let mediaUrl='';let mediaBase64='';let mimeType='';if(message.conversation)text=String(message.conversation);else if(message.extendedTextMessage&&message.extendedTextMessage.text)text=String(message.extendedTextMessage.text);if(message.audioMessage){mimeType=String(message.audioMessage.mimetype||'audio/ogg');mediaUrl=String(message.audioMessage.url||'');}else if(message.imageMessage){mimeType=String(message.imageMessage.mimetype||'image/jpeg');mediaUrl=String(message.imageMessage.url||'');caption=String(message.imageMessage.caption||'');}else if(message.documentMessage){mimeType=String(message.documentMessage.mimetype||'application/pdf');mediaUrl=String(message.documentMessage.url||'');caption=String(message.documentMessage.caption||message.documentMessage.title||'');}if(data.mediaBase64)mediaBase64=String(data.mediaBase64);else if(data.media_base64)mediaBase64=String(data.media_base64);const tsRaw=data.messageTimestamp;let timestamp;if(typeof tsRaw==='number')timestamp=new Date(tsRaw*1000).toISOString();else if(typeof tsRaw==='string'&&/^\\d+$/.test(tsRaw))timestamp=new Date(Number(tsRaw)*1000).toISOString();else timestamp=new Date().toISOString();const conversationId=(b.chatwoot_conversation_id!==undefined&&b.chatwoot_conversation_id!==null)?String(b.chatwoot_conversation_id):'';const contactId=(b.chatwoot_contact_id!==undefined&&b.chatwoot_contact_id!==null)?String(b.chatwoot_contact_id):'';const instance=String(b.instance||'');const pushName=String((data.pushName)||'');const testRunId=additional.test_run_id||(b.test_run_id)||null;return{json:{raw_phone:rawPhone,msg_id:msgId,from_me:fromMe,message_type:messageType,text:text,caption:caption,media_url:mediaUrl,media_base64:mediaBase64,mime_type:mimeType,chatwoot_conversation_id:conversationId,chatwoot_contact_id:contactId,instance:instance,push_name:pushName,timestamp:timestamp,test_run_id:testRunId,raw_payload_json:JSON.stringify(b)}};});"
+      }
+    },
+    {
+      "id": "234cc9b2-5bfa-4f6c-832b-d9bf171ab61c",
+      "name": "INSERT inbound_received",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        448,
+        864
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('inbound_received', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Normalize Payload').first().json; return [m.raw_phone, m.chatwoot_conversation_id, JSON.stringify({ msg_id: m.msg_id, message_type: m.message_type, from_me: m.from_me, test_run_id: m.test_run_id })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "6ddd0e9a-ebc7-4b24-9c64-0698e739f016",
+      "name": "COND1 fromMe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        864
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $('Normalize Payload').first().json.from_me }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "305d33b3-1ce9-4a37-902b-af29682aba3b",
+      "name": "INSERT block fromMe",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7392,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('inbound_blocked', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Normalize Payload').first().json; return [m.raw_phone, m.chatwoot_conversation_id, JSON.stringify({ reason: 'fromMe', msg_id: m.msg_id, message_type: m.message_type, test_run_id: m.test_run_id })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "c418fa7d-87c9-4dff-b5ce-b5cfbd211688",
+      "name": "Resp fromMe",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7616,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "rfm-ok",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "rfm-bl",
+              "name": "blocked",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "rfm-br",
+              "name": "branch",
+              "value": "blocked_fromMe",
+              "type": "string"
+            },
+            {
+              "id": "rfm-cd",
+              "name": "blocked_at_condition",
+              "value": 1,
+              "type": "number"
+            },
+            {
+              "id": "rfm-rs",
+              "name": "reason",
+              "value": "fromMe",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "a9f97699-d4cc-41ef-967d-a79e110685da",
+      "name": "Final Response Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        7840,
+        736
+      ],
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 10
+      }
+    },
+    {
+      "id": "4be759e8-633f-4904-babd-3d1deba223fb",
+      "name": "Read Settings",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        896,
+        960
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (SELECT value::text FROM public.settings WHERE key='ai_enabled_global') AS ai_enabled_global, (SELECT value::text FROM public.settings WHERE key='workflows_enabled') AS workflows_enabled, (SELECT value::text FROM public.settings WHERE key='holidays') AS holidays, (SELECT value::text FROM public.settings WHERE key='holiday_policy') AS holiday_policy, (SELECT value::text FROM public.settings WHERE key='after_hours_start') AS after_hours_start, (SELECT value::text FROM public.settings WHERE key='after_hours_end') AS after_hours_end, (SELECT value::text FROM public.settings WHERE key='timezone') AS timezone;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "7257a986-7a7d-45c0-8965-e228ff481505",
+      "name": "COND2 ai_disabled_global?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        960
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ (function(){ try { return JSON.parse(($('Read Settings').first().json.ai_enabled_global || 'true')) === false; } catch(e) { return ($('Read Settings').first().json.ai_enabled_global || 'true').toString().toLowerCase() === 'false'; } })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7808981d-3106-4f8a-ac01-453ddf260c41",
+      "name": "INSERT block ai_disabled_global",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7392,
+        192
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('inbound_blocked', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Normalize Payload').first().json; return [m.raw_phone, m.chatwoot_conversation_id, JSON.stringify({ reason: 'ai_disabled_global', msg_id: m.msg_id, message_type: m.message_type, test_run_id: m.test_run_id })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "860c4c66-f18b-4afd-be9c-b9b65b78bd8d",
+      "name": "Resp ai_disabled_global",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7616,
+        192
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r2a",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "r2b",
+              "name": "branch",
+              "value": "blocked_ai_disabled_global",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "8d355a2a-5f20-4a08-8081-afa4001a469d",
+      "name": "COND3 workflow_disabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        1056
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c3",
+              "leftValue": "={{ (function(){ try { const we = JSON.parse(($('Read Settings').first().json.workflows_enabled || '{}')); return we && we.IGOR_01 === false; } catch(e) { return false; } })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a607b757-8c31-4817-ade7-070844dec451",
+      "name": "INSERT block workflow_disabled",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7392,
+        384
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('inbound_blocked', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Normalize Payload').first().json; return [m.raw_phone, m.chatwoot_conversation_id, JSON.stringify({ reason: 'workflow_disabled', msg_id: m.msg_id, message_type: m.message_type, test_run_id: m.test_run_id })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "7ba1422c-7dfd-4de6-9e1b-a145012c90ad",
+      "name": "Resp workflow_disabled",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7616,
+        384
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r3a",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "r3b",
+              "name": "branch",
+              "value": "blocked_workflow_disabled",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "fbc77954-fa17-4a22-bf32-693a8917d0b7",
+      "name": "Normalize Phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        1152
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const m=$('Normalize Payload').first().json;const raw=String(m.raw_phone||'');let digits=raw.replace(/\\D/g,'');if(digits.length===13&&digits.startsWith('55')){const ddd=digits.substring(2,4);const rest=digits.substring(4);if(/^[1-9][0-9]$/.test(ddd)&&/^9\\d{8}$/.test(rest)){return[{json:{phone:digits,phone_valid:true,raw_phone:raw}}];}}if(digits.length===12&&digits.startsWith('55')){const ddd=digits.substring(2,4);const rest=digits.substring(4);if(/^[1-9][0-9]$/.test(ddd)&&/^\\d{8}$/.test(rest)){const normalized='55'+ddd+'9'+rest;return[{json:{phone:normalized,phone_valid:true,raw_phone:raw}}];}}return[{json:{phone:'',phone_valid:false,raw_phone:raw,reason:'invalid_format'}}];"
+      }
+    },
+    {
+      "id": "cd6283d2-14ab-443c-9e47-a66728c02282",
+      "name": "COND4 phone invalid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1792,
+        1152
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c4",
+              "leftValue": "={{ $('Normalize Phone').first().json.phone_valid }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e781339f-2ef9-4e30-83c1-43b65eaaac94",
+      "name": "INSERT invalid_phone",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7392,
+        576
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('invalid_phone', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Normalize Payload').first().json; const p = $('Normalize Phone').first().json; return [p.raw_phone, m.chatwoot_conversation_id, JSON.stringify({ raw_phone: p.raw_phone, reason: p.reason || 'invalid_phone', msg_id: m.msg_id, test_run_id: m.test_run_id })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "733642b9-cb57-404e-88ec-3d05bb435819",
+      "name": "Resp invalid_phone",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7616,
+        576
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r4a",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "r4b",
+              "name": "branch",
+              "value": "blocked_invalid_phone",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "1a037212-af2e-4567-a7da-72e94f9a2138",
+      "name": "Lookup Contact",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2016,
+        1248
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT c.id::text AS contact_id, c.phone, c.do_not_contact, c.consent_marketing, c.optout_at::text AS optout_at FROM public.contacts c WHERE c.phone = $1::text LIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ $('Normalize Phone').first().json.phone }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "76a96780-6fe4-4be5-a1e1-d14e26e14620",
+      "name": "COND5 do_not_contact?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2240,
+        1248
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c5",
+              "leftValue": "={{ (function(){ const all = $('Lookup Contact').all(); if (!all || all.length === 0) return false; const c = all[0].json || {}; return c.do_not_contact === true; })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "159e56a6-8061-4155-8a8d-209958680179",
+      "name": "CALL IGOR_04 optout label",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        7168,
+        768
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "AJF7dhGrqJEXMLqz",
+          "cachedResultName": "IGOR_04_Tool_Labels_Attributes"
+        },
+        "mode": "once",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chatwoot_conversation_id": "={{ $('Normalize Payload').first().json.chatwoot_conversation_id }}",
+            "chatwoot_contact_id": "={{ $('Normalize Payload').first().json.chatwoot_contact_id }}",
+            "labels_to_add": "={{ ['optout'] }}",
+            "labels_to_remove": "={{ [] }}",
+            "custom_attributes": "={{ ({ conversation: { automation_state: 'opt_out_blocked' }, contact: { do_not_contact: true } }) }}",
+            "test_run_id": "={{ $('Normalize Payload').first().json.test_run_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chatwoot_conversation_id",
+              "displayName": "chatwoot_conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "chatwoot_contact_id",
+              "displayName": "chatwoot_contact_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "labels_to_add",
+              "displayName": "labels_to_add",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "array"
+            },
+            {
+              "id": "labels_to_remove",
+              "displayName": "labels_to_remove",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "array"
+            },
+            {
+              "id": "custom_attributes",
+              "displayName": "custom_attributes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "object"
+            },
+            {
+              "id": "test_run_id",
+              "displayName": "test_run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "3e4335c6-da92-43ba-aeee-353ffba39cf0",
+      "name": "INSERT block opt_out",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7392,
+        768
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('inbound_blocked', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Normalize Payload').first().json; return [m.raw_phone, m.chatwoot_conversation_id, JSON.stringify({ reason: 'opt_out', msg_id: m.msg_id, message_type: m.message_type, test_run_id: m.test_run_id })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "3cb57411-09bd-429b-835a-0f6404966ba0",
+      "name": "Resp opt_out",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7616,
+        768
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r5a",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "r5b",
+              "name": "branch",
+              "value": "blocked_opt_out",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "ebd62f3e-c7b3-45ba-bfbc-31430485d0f8",
+      "name": "Lookup Conversation",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2464,
+        1344
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT cv.id::text AS conv_id, cv.state, cv.ai_enabled, cv.human_locked FROM public.conversations cv WHERE cv.chatwoot_conversation_id = NULLIF($1::text, '')::int LIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ $('Normalize Payload').first().json.chatwoot_conversation_id }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "068b6ffd-0022-4036-bc70-323d7aeec89b",
+      "name": "COND6 human_locked OR ai_disabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2688,
+        1344
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "or",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c6a",
+              "leftValue": "={{ (function(){ const all = $('Lookup Conversation').all(); if (!all || all.length === 0) return false; const cv = all[0].json || {}; if (!cv || cv.conv_id === undefined) return false; return cv.human_locked === true; })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c6b",
+              "leftValue": "={{ (function(){ const all = $('Lookup Conversation').all(); if (!all || all.length === 0) return false; const cv = all[0].json || {}; if (!cv || cv.conv_id === undefined) return false; return cv.ai_enabled === false; })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "36f6fde9-fe42-479e-8660-8987d0f21836",
+      "name": "INSERT block human_locked_or_ai_disabled",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7392,
+        960
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('inbound_blocked', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Normalize Payload').first().json; return [m.raw_phone, m.chatwoot_conversation_id, JSON.stringify({ reason: 'human_locked_or_ai_disabled', msg_id: m.msg_id, test_run_id: m.test_run_id })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "67b07ce1-be1b-40ca-80e6-9600bd385423",
+      "name": "Resp human_locked_or_ai_disabled",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7616,
+        960
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r6a",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "r6b",
+              "name": "branch",
+              "value": "blocked_human_locked_or_ai_disabled",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "87a21944-be52-4096-88b0-4df199e89d27",
+      "name": "Lookup Campaign Contacts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2912,
+        1440
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT cc.id::text AS campaign_contact_id, cc.campaign_id::text AS campaign_id, cc.status FROM public.campaign_contacts cc JOIN public.contacts c ON c.id = cc.contact_id WHERE c.phone = $1::text AND cc.status IN ('sent','delivered','replied','interested') ORDER BY cc.updated_at DESC LIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ $('Normalize Phone').first().json.phone }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      },
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "3528355b-b9a0-40c9-97b9-b7066510f246",
+      "name": "COND7 campaign_active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3136,
+        1440
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c7",
+              "leftValue": "={{ (function(){ const all = $('Lookup Campaign Contacts').all(); if (!all || all.length === 0) return false; const c = all[0].json || {}; return !!c.campaign_contact_id; })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d7155b3b-c4b8-42ad-b0e7-9ccf0a4edf14",
+      "name": "INSERT campaign_routed_pending_IGOR_12",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7392,
+        1152
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, campaign_id, campaign_contact_id, workflow_name, payload) VALUES ('campaign_routed_pending_IGOR_12', NULLIF($1::text, ''), NULLIF($2::text, '')::int, NULLIF($3::text, '')::uuid, NULLIF($4::text, '')::uuid, 'IGOR_01_Inbound_AfterHours', $5::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Normalize Payload').first().json; const p = $('Normalize Phone').first().json; const all = $('Lookup Campaign Contacts').all(); const cc = (all && all[0] && all[0].json) || {}; return [p.phone, m.chatwoot_conversation_id, cc.campaign_id || '', cc.campaign_contact_id || '', JSON.stringify({ reason: 'IGOR_12_not_yet_implemented', campaign_contact_status: cc.status || null, msg_id: m.msg_id, message_type: m.message_type, test_run_id: m.test_run_id })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "d829b864-5cb4-4c07-8ce8-9539d46ab667",
+      "name": "Resp campaign_routed_pending_IGOR_12",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7616,
+        1152
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r7a",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "r7b",
+              "name": "branch",
+              "value": "campaign_routed_pending_IGOR_12",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "be2cceec-0fdf-424c-9c57-55db2458466a",
+      "name": "Check Business Hours + Holiday",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        1536
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const s=$('Read Settings').first().json||{};function pjs(raw,fb){if(raw===undefined||raw===null||raw==='')return fb;try{return JSON.parse(raw);}catch(e){return fb;}}const ahStart=pjs(s.after_hours_start,'19:00');const ahEnd=pjs(s.after_hours_end,'08:00');const tz=pjs(s.timezone,'America/Sao_Paulo');const holidaysList=pjs(s.holidays,[]);const holidayPolicy=pjs(s.holiday_policy,'after_hours_force');const now=new Date();let hh='00';let mm='00';let ymd=now.toISOString().slice(0,10);try{const fmt=new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});const parts=fmt.formatToParts(now).reduce(function(acc,p){acc[p.type]=p.value;return acc;},{});ymd=(parts.year||'0000')+'-'+(parts.month||'01')+'-'+(parts.day||'01');hh=parts.hour||'00';mm=parts.minute||'00';if(hh==='24')hh='00';}catch(e){}const curHm=hh+':'+mm;function hmToMin(s){const parts=String(s||'').split(':');const h=Number(parts[0]||0);const m=Number(parts[1]||0);return h*60+m;}const curMin=hmToMin(curHm);const startMin=hmToMin(ahStart);const endMin=hmToMin(ahEnd);let insideBusinessHours;if(endMin<startMin){insideBusinessHours=(curMin>=endMin&&curMin<startMin);}else{insideBusinessHours=(curMin>=endMin||curMin<startMin);}const isHoliday=Array.isArray(holidaysList)&&holidaysList.indexOf(ymd)!==-1;let effectiveInsideBusinessHours=insideBusinessHours;if(isHoliday&&holidayPolicy==='after_hours_force'){effectiveInsideBusinessHours=false;}return[{json:{current_hm:curHm,current_ymd:ymd,timezone:tz,inside_business_hours:effectiveInsideBusinessHours,is_holiday:isHoliday,holiday_policy:holidayPolicy}}];"
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "890e0e1a-9a08-4789-a36e-39e24cb165a0",
+      "name": "COND8 inside business hours?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3584,
+        1536
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c8",
+              "leftValue": "={{ $('Check Business Hours + Holiday').first().json.inside_business_hours }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ae3e0a17-4ffb-48ca-a924-1835f6aa8e37",
+      "name": "INSERT block inside_hours",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7392,
+        1344
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('inbound_blocked', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Normalize Payload').first().json; return [m.raw_phone, m.chatwoot_conversation_id, JSON.stringify({ reason: 'inside_hours', msg_id: m.msg_id, test_run_id: m.test_run_id })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "013b53ba-9be1-4744-9c95-ae4585000ac3",
+      "name": "Resp inside_hours",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7616,
+        1344
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r8a",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "r8b",
+              "name": "branch",
+              "value": "blocked_inside_hours",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "af1033e8-cdd6-44d1-9cb5-1471be154768",
+      "name": "INSERT holiday_policy_applied",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3808,
+        1632
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('holiday_policy_applied', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Normalize Payload').first().json; const h = $('Check Business Hours + Holiday').first().json; if (!h.is_holiday) return [m.raw_phone || null, m.chatwoot_conversation_id || null, JSON.stringify({ skip: true })]; return [m.raw_phone, m.chatwoot_conversation_id, JSON.stringify({ is_holiday: true, ymd: h.current_ymd, holiday_policy: h.holiday_policy, msg_id: m.msg_id, test_run_id: m.test_run_id })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "6a966efb-896e-4d69-ae3f-48131cc2f848",
+      "name": "Redis Lock INCR",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        4032,
+        1632
+      ],
+      "parameters": {
+        "operation": "incr",
+        "key": "={{ 'igor:lock:inbound:' + $('Normalize Phone').first().json.phone }}",
+        "expire": true,
+        "ttl": 30
+      },
+      "credentials": {
+        "redis": {
+          "id": "ayVMY7Njm6ecLLuc",
+          "name": "igor_redis_embedded"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "86ca6e04-0d86-4931-9d07-2204ad6a1fd5",
+      "name": "Eval Lock Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4256,
+        1632
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const phone=$('Normalize Phone').first().json.phone;const key='igor:lock:inbound:'+phone;const items=$input.all();const obj=(items[0]&&items[0].json)||{};let counter=obj[key];if(counter===undefined){for(const k of Object.keys(obj)){if(k.indexOf('igor:lock:inbound:')===0){counter=obj[k];break;}}}const counterNum=Number(counter);const gotLock=counterNum===1;return[{json:{phone:phone,lock_key:key,counter:isNaN(counterNum)?null:counterNum,got_lock:gotLock}}];"
+      }
+    },
+    {
+      "id": "750b7f7d-48b1-48fe-b4a6-b20281a24505",
+      "name": "COND10 got lock?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4480,
+        1632
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c10",
+              "leftValue": "={{ $('Eval Lock Result').first().json.got_lock }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b894599b-658a-442f-b19a-79f87ac0a14e",
+      "name": "Wait 3s for Fragments",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4704,
+        1536
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "webhookId": "e80ab5d7-cb79-4e3a-a742-93c73121c4c8"
+    },
+    {
+      "id": "a8d44587-888f-45f6-aed2-9f53dfc9070d",
+      "name": "Redis Get batch (LRANGE)",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        4928,
+        1536
+      ],
+      "parameters": {
+        "operation": "get",
+        "propertyName": "batch_fragments",
+        "key": "={{ 'igor:batch:' + $('Normalize Phone').first().json.phone }}",
+        "keyType": "list",
+        "options": {
+          "dotNotation": false
+        }
+      },
+      "credentials": {
+        "redis": {
+          "id": "ayVMY7Njm6ecLLuc",
+          "name": "igor_redis_embedded"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "7597908b-0291-49e0-9410-a701c46f203b",
+      "name": "Redis DEL batch",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        5152,
+        1536
+      ],
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ 'igor:batch:' + $('Normalize Phone').first().json.phone }}"
+      },
+      "credentials": {
+        "redis": {
+          "id": "ayVMY7Njm6ecLLuc",
+          "name": "igor_redis_embedded"
+        }
+      }
+    },
+    {
+      "id": "8ea361f2-da02-4353-9cc9-a473e0103454",
+      "name": "Merge Fragments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5376,
+        1536
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const m=$('Normalize Payload').first().json;const items=$input.all();const lrangeOut=(items[0]&&items[0].json)||{};let frags=lrangeOut.batch_fragments;if(typeof frags==='string'){try{frags=JSON.parse(frags);}catch(e){frags=[frags];}}if(!Array.isArray(frags))frags=[];const parsed=[];for(const f of frags){if(typeof f==='string'){try{parsed.push(JSON.parse(f));}catch(e){parsed.push({text:f});}}else if(f&&typeof f==='object'){parsed.push(f);}}const allTexts=[];for(const f of parsed){const t=(f.text||f.caption||'').trim();if(t)allTexts.push(t);}const currentText=(m.text||m.caption||'').trim();if(currentText)allTexts.push(currentText);const merged=allTexts.join('\\n').trim();return[{json:{fragments_count:parsed.length+(currentText?1:0),merged_text:merged,prior_fragments:parsed}}];"
+      }
+    },
+    {
+      "id": "923e0b06-038b-4c27-a6c0-5dfa4297c465",
+      "name": "COND11 messageType != text?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5600,
+        1536
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c11",
+              "leftValue": "={{ $('Normalize Payload').first().json.message_type }}",
+              "rightValue": "text",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "134fd88f-9591-43b4-abc6-2211fa2ed7ec",
+      "name": "CALL IGOR_02 Media Normalizer",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        5824,
+        1536
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "GBmG9WZzW2p8Nn6f",
+          "cachedResultName": "IGOR_02_Media_Normalizer"
+        },
+        "mode": "once",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Normalize Phone').first().json.phone }}",
+            "msgId": "={{ $('Normalize Payload').first().json.msg_id }}",
+            "messageType": "={{ $('Normalize Payload').first().json.message_type }}",
+            "media_url": "={{ $('Normalize Payload').first().json.media_url }}",
+            "media_base64": "={{ $('Normalize Payload').first().json.media_base64 }}",
+            "caption": "={{ $('Normalize Payload').first().json.caption }}",
+            "mimeType": "={{ $('Normalize Payload').first().json.mime_type }}",
+            "chatwoot_conversation_id": "={{ $('Normalize Payload').first().json.chatwoot_conversation_id }}",
+            "test_run_id": "={{ $('Normalize Payload').first().json.test_run_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "msgId",
+              "displayName": "msgId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "messageType",
+              "displayName": "messageType",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "media_url",
+              "displayName": "media_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "media_base64",
+              "displayName": "media_base64",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "caption",
+              "displayName": "caption",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "mimeType",
+              "displayName": "mimeType",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "chatwoot_conversation_id",
+              "displayName": "chatwoot_conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "test_run_id",
+              "displayName": "test_run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "3c89ef40-0585-46f6-b958-1754c254f04c",
+      "name": "Merge media+text",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        6048,
+        1536
+      ],
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      }
+    },
+    {
+      "id": "be95732b-6925-4330-8041-9d082add34fa",
+      "name": "Batch Prepare Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6720,
+        1728
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const m=$('Normalize Payload').first().json;const p=$('Normalize Phone').first().json;const payload=JSON.stringify({msg_id:m.msg_id,text:m.text,caption:m.caption,message_type:m.message_type,media_url:m.media_url,media_base64:m.media_base64?'[base64]':'',mime_type:m.mime_type,timestamp:m.timestamp,test_run_id:m.test_run_id});return[{json:{phone:p.phone,batch_key:'igor:batch:'+p.phone,fragment_payload:payload}}];"
+      }
+    },
+    {
+      "id": "b68d32a7-4822-4823-8d45-285e65600a33",
+      "name": "Redis RPUSH batch fragment",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        6944,
+        1728
+      ],
+      "parameters": {
+        "operation": "push",
+        "list": "={{ $('Batch Prepare Payload').first().json.batch_key }}",
+        "messageData": "={{ $('Batch Prepare Payload').first().json.fragment_payload }}",
+        "tail": true
+      },
+      "credentials": {
+        "redis": {
+          "id": "ayVMY7Njm6ecLLuc",
+          "name": "igor_redis_embedded"
+        }
+      }
+    },
+    {
+      "id": "b170b3c9-6801-47cf-86d3-67b9e7e89534",
+      "name": "Redis EXPIRE batch via marker",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        7168,
+        1728
+      ],
+      "parameters": {
+        "operation": "incr",
+        "key": "={{ 'igor:batch:marker:' + $('Batch Prepare Payload').first().json.phone }}",
+        "expire": true,
+        "ttl": 60
+      },
+      "credentials": {
+        "redis": {
+          "id": "ayVMY7Njm6ecLLuc",
+          "name": "igor_redis_embedded"
+        }
+      }
+    },
+    {
+      "id": "92a28bac-4fb7-4ac3-8035-7a49319522e5",
+      "name": "INSERT inbound_batched",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7392,
+        1728
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('inbound_batched', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Normalize Payload').first().json; const p = $('Normalize Phone').first().json; const l = $('Eval Lock Result').first().json; return [p.phone, m.chatwoot_conversation_id, JSON.stringify({ reason: 'lock_held', counter: l.counter, msg_id: m.msg_id, test_run_id: m.test_run_id })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "d67b9ba6-0de3-4106-ad6e-037fb622c827",
+      "name": "Resp inbound_batched",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7616,
+        1728
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r10a",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "r10b",
+              "name": "branch",
+              "value": "batched_lock_held",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "db1803e6-40af-4cec-8002-aa201d6aed9d",
+      "name": "Build Normalized Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6272,
+        1536
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const m=$('Normalize Payload').first().json;const p=$('Normalize Phone').first().json;const mf=$('Merge Fragments').first().json;let normalizedText=mf.merged_text||m.text||'';let safetyFlags={clinical:false,sensitive_image:false,payment_proof:false,financial:false};let shouldHandoff=false;let handoffReason=null;try{if(m.message_type&&m.message_type!=='text'){const media=$('CALL IGOR_02 Media Normalizer').first().json||{};if(media.normalized_text){const mediaText=String(media.normalized_text);normalizedText=normalizedText?(normalizedText+'\\n'+mediaText):mediaText;}if(media.safety_flags&&typeof media.safety_flags==='object')safetyFlags=media.safety_flags;if(media.should_handoff===true)shouldHandoff=true;if(media.handoff_reason)handoffReason=media.handoff_reason;}}catch(e){}return[{json:{phone:p.phone,msg_id:m.msg_id,message_type:m.message_type,chatwoot_conversation_id:m.chatwoot_conversation_id,chatwoot_contact_id:m.chatwoot_contact_id,instance:m.instance,push_name:m.push_name,timestamp:m.timestamp,normalized_text:normalizedText,fragments_count:mf.fragments_count||1,safety_flags:safetyFlags,should_handoff:shouldHandoff,handoff_reason:handoffReason,test_run_id:m.test_run_id}}];"
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "a35e8dcd-7282-4647-a12a-7f8854759a80",
+      "name": "UPSERT conversation ai_after_hours",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        6496,
+        1536
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH up_contact AS (INSERT INTO public.contacts (phone, name) VALUES ($1::text, NULLIF($2::text, '')) ON CONFLICT (phone) DO UPDATE SET name = COALESCE(NULLIF(EXCLUDED.name, ''), public.contacts.name), updated_at = now() RETURNING id) INSERT INTO public.conversations (contact_id, chatwoot_conversation_id, chatwoot_inbox_id, state, ai_enabled, current_flow, last_message_at) SELECT uc.id, NULLIF($3::text, '')::int, COALESCE(NULLIF($4::text, '')::int, 1), 'ai_after_hours', true, 'after_hours', COALESCE(NULLIF($5::text, '')::timestamptz, now()) FROM up_contact uc ON CONFLICT (chatwoot_conversation_id) DO UPDATE SET state = 'ai_after_hours', ai_enabled = CASE WHEN public.conversations.ai_enabled IS NULL THEN true ELSE public.conversations.ai_enabled END, current_flow = 'after_hours', last_message_at = EXCLUDED.last_message_at, updated_at = now() RETURNING id::text AS conversation_uuid, chatwoot_conversation_id, state, ai_enabled;",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Build Normalized Output').first().json; return [m.phone, m.push_name || '', m.chatwoot_conversation_id, '1', m.timestamp]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "c70263a5-be03-41e4-8605-fbdcc21ae186",
+      "name": "UPSERT message inbound",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        6720,
+        1536
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.messages (conversation_id, msg_id, text, normalized_text, message_type, direction, role, from_me, media_url, media_mime_type, safety_flags, created_at) SELECT c.id, NULLIF($1::text, ''), NULLIF($2::text, ''), NULLIF($3::text, ''), COALESCE(NULLIF($4::text, ''), 'text'), 'inbound', 'user', false, NULLIF($5::text, ''), NULLIF($6::text, ''), COALESCE(NULLIF($7::text, '')::jsonb, '{}'::jsonb), COALESCE(NULLIF($8::text, '')::timestamptz, now()) FROM public.conversations c WHERE c.chatwoot_conversation_id = NULLIF($9::text, '')::int;",
+        "options": {
+          "queryReplacement": "={{ (function(){ const o = $('Build Normalized Output').first().json; const m = $('Normalize Payload').first().json; return [o.msg_id, m.text || '', o.normalized_text, o.message_type, m.media_url || '', m.mime_type || '', JSON.stringify(o.safety_flags || {}), o.timestamp, o.chatwoot_conversation_id]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "6d521430-e0fe-4913-b970-32cdd0c5af79",
+      "name": "CALL IGOR_04 fora_expediente",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        6944,
+        1536
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "AJF7dhGrqJEXMLqz",
+          "cachedResultName": "IGOR_04_Tool_Labels_Attributes"
+        },
+        "mode": "once",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chatwoot_conversation_id": "={{ $('Build Normalized Output').first().json.chatwoot_conversation_id }}",
+            "chatwoot_contact_id": "={{ $('Build Normalized Output').first().json.chatwoot_contact_id }}",
+            "labels_to_add": "={{ ['fora_expediente'] }}",
+            "labels_to_remove": "={{ [] }}",
+            "custom_attributes": "={{ ({ conversation: { automation_state: 'ai_after_hours', lead_status: 'qualificacao_inicial' }, contact: {} }) }}",
+            "test_run_id": "={{ $('Build Normalized Output').first().json.test_run_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chatwoot_conversation_id",
+              "displayName": "chatwoot_conversation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "chatwoot_contact_id",
+              "displayName": "chatwoot_contact_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "labels_to_add",
+              "displayName": "labels_to_add",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "array"
+            },
+            {
+              "id": "labels_to_remove",
+              "displayName": "labels_to_remove",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "array"
+            },
+            {
+              "id": "custom_attributes",
+              "displayName": "custom_attributes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "object"
+            },
+            {
+              "id": "test_run_id",
+              "displayName": "test_run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "92f722bf-4e86-41b3-ae8a-407a460b6b64",
+      "name": "INSERT inbound_routed_pending_IGOR_03",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        7168,
+        1536
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('inbound_routed_pending_IGOR_03', NULLIF($1::text, ''), NULLIF($2::text, '')::int, 'IGOR_01_Inbound_AfterHours', $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const o = $('Build Normalized Output').first().json; return [o.phone, o.chatwoot_conversation_id, JSON.stringify({ msg_id: o.msg_id, message_type: o.message_type, fragments_count: o.fragments_count, normalized_text_preview: (o.normalized_text || '').slice(0, 240), should_handoff: o.should_handoff, handoff_reason: o.handoff_reason, safety_flags: o.safety_flags, chatwoot_contact_id: o.chatwoot_contact_id, push_name: o.push_name, instance: o.instance, reason: 'IGOR_03_not_yet_implemented_wave_4_placeholder', test_run_id: o.test_run_id })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "4d093d6b-4c4d-40bf-86fe-495b61dd7c6f",
+      "name": "Redis DEL lock",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        7392,
+        1536
+      ],
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ 'igor:lock:inbound:' + $('Normalize Phone').first().json.phone }}"
+      },
+      "credentials": {
+        "redis": {
+          "id": "ayVMY7Njm6ecLLuc",
+          "name": "igor_redis_embedded"
+        }
+      }
+    },
+    {
+      "id": "82787752-bb51-4d2b-9903-6b8d728082e8",
+      "name": "Resp routed_ai_after_hours",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7616,
+        1536
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "rok",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "rbl",
+              "name": "blocked",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "rbr",
+              "name": "branch",
+              "value": "routed_ai_after_hours",
+              "type": "string"
+            },
+            {
+              "id": "rrs",
+              "name": "reason",
+              "value": "routed_to_IGOR_03_placeholder_wave_4",
+              "type": "string"
+            },
+            {
+              "id": "rds",
+              "name": "downstream_calls",
+              "value": "={{ (function(){ const o = $('Build Normalized Output').first().json; const calls = []; if (o.message_type && o.message_type !== 'text') calls.push('IGOR_02'); calls.push('IGOR_04:fora_expediente'); calls.push('IGOR_03:placeholder'); return calls; })() }}",
+              "type": "array"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Evolution Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Payload": {
+      "main": [
+        [
+          {
+            "node": "INSERT inbound_received",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT inbound_received": {
+      "main": [
+        [
+          {
+            "node": "COND1 fromMe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COND1 fromMe?": {
+      "main": [
+        [
+          {
+            "node": "INSERT block fromMe",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT block fromMe": {
+      "main": [
+        [
+          {
+            "node": "Resp fromMe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resp fromMe": {
+      "main": [
+        [
+          {
+            "node": "Final Response Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Settings": {
+      "main": [
+        [
+          {
+            "node": "COND2 ai_disabled_global?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COND2 ai_disabled_global?": {
+      "main": [
+        [
+          {
+            "node": "INSERT block ai_disabled_global",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "COND3 workflow_disabled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT block ai_disabled_global": {
+      "main": [
+        [
+          {
+            "node": "Resp ai_disabled_global",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resp ai_disabled_global": {
+      "main": [
+        [
+          {
+            "node": "Final Response Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "COND3 workflow_disabled?": {
+      "main": [
+        [
+          {
+            "node": "INSERT block workflow_disabled",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Normalize Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT block workflow_disabled": {
+      "main": [
+        [
+          {
+            "node": "Resp workflow_disabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resp workflow_disabled": {
+      "main": [
+        [
+          {
+            "node": "Final Response Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Normalize Phone": {
+      "main": [
+        [
+          {
+            "node": "COND4 phone invalid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COND4 phone invalid?": {
+      "main": [
+        [
+          {
+            "node": "INSERT invalid_phone",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lookup Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT invalid_phone": {
+      "main": [
+        [
+          {
+            "node": "Resp invalid_phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resp invalid_phone": {
+      "main": [
+        [
+          {
+            "node": "Final Response Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Lookup Contact": {
+      "main": [
+        [
+          {
+            "node": "COND5 do_not_contact?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COND5 do_not_contact?": {
+      "main": [
+        [
+          {
+            "node": "CALL IGOR_04 optout label",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lookup Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CALL IGOR_04 optout label": {
+      "main": [
+        [
+          {
+            "node": "INSERT block opt_out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT block opt_out": {
+      "main": [
+        [
+          {
+            "node": "Resp opt_out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resp opt_out": {
+      "main": [
+        [
+          {
+            "node": "Final Response Merge",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Lookup Conversation": {
+      "main": [
+        [
+          {
+            "node": "COND6 human_locked OR ai_disabled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COND6 human_locked OR ai_disabled?": {
+      "main": [
+        [
+          {
+            "node": "INSERT block human_locked_or_ai_disabled",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lookup Campaign Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT block human_locked_or_ai_disabled": {
+      "main": [
+        [
+          {
+            "node": "Resp human_locked_or_ai_disabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resp human_locked_or_ai_disabled": {
+      "main": [
+        [
+          {
+            "node": "Final Response Merge",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "Lookup Campaign Contacts": {
+      "main": [
+        [
+          {
+            "node": "COND7 campaign_active?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COND7 campaign_active?": {
+      "main": [
+        [
+          {
+            "node": "INSERT campaign_routed_pending_IGOR_12",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Business Hours + Holiday",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT campaign_routed_pending_IGOR_12": {
+      "main": [
+        [
+          {
+            "node": "Resp campaign_routed_pending_IGOR_12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resp campaign_routed_pending_IGOR_12": {
+      "main": [
+        [
+          {
+            "node": "Final Response Merge",
+            "type": "main",
+            "index": 6
+          }
+        ]
+      ]
+    },
+    "Check Business Hours + Holiday": {
+      "main": [
+        [
+          {
+            "node": "COND8 inside business hours?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COND8 inside business hours?": {
+      "main": [
+        [
+          {
+            "node": "INSERT block inside_hours",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "INSERT holiday_policy_applied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT block inside_hours": {
+      "main": [
+        [
+          {
+            "node": "Resp inside_hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resp inside_hours": {
+      "main": [
+        [
+          {
+            "node": "Final Response Merge",
+            "type": "main",
+            "index": 7
+          }
+        ]
+      ]
+    },
+    "INSERT holiday_policy_applied": {
+      "main": [
+        [
+          {
+            "node": "Redis Lock INCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Lock INCR": {
+      "main": [
+        [
+          {
+            "node": "Eval Lock Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eval Lock Result": {
+      "main": [
+        [
+          {
+            "node": "COND10 got lock?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COND10 got lock?": {
+      "main": [
+        [
+          {
+            "node": "Wait 3s for Fragments",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Batch Prepare Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 3s for Fragments": {
+      "main": [
+        [
+          {
+            "node": "Redis Get batch (LRANGE)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Get batch (LRANGE)": {
+      "main": [
+        [
+          {
+            "node": "Redis DEL batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis DEL batch": {
+      "main": [
+        [
+          {
+            "node": "Merge Fragments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Fragments": {
+      "main": [
+        [
+          {
+            "node": "COND11 messageType != text?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COND11 messageType != text?": {
+      "main": [
+        [
+          {
+            "node": "CALL IGOR_02 Media Normalizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CALL IGOR_02 Media Normalizer": {
+      "main": [
+        [
+          {
+            "node": "Merge media+text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge media+text": {
+      "main": [
+        [
+          {
+            "node": "Build Normalized Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Prepare Payload": {
+      "main": [
+        [
+          {
+            "node": "Redis RPUSH batch fragment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis RPUSH batch fragment": {
+      "main": [
+        [
+          {
+            "node": "Redis EXPIRE batch via marker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis EXPIRE batch via marker": {
+      "main": [
+        [
+          {
+            "node": "INSERT inbound_batched",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT inbound_batched": {
+      "main": [
+        [
+          {
+            "node": "Resp inbound_batched",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resp inbound_batched": {
+      "main": [
+        [
+          {
+            "node": "Final Response Merge",
+            "type": "main",
+            "index": 8
+          }
+        ]
+      ]
+    },
+    "Build Normalized Output": {
+      "main": [
+        [
+          {
+            "node": "UPSERT conversation ai_after_hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UPSERT conversation ai_after_hours": {
+      "main": [
+        [
+          {
+            "node": "UPSERT message inbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UPSERT message inbound": {
+      "main": [
+        [
+          {
+            "node": "CALL IGOR_04 fora_expediente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CALL IGOR_04 fora_expediente": {
+      "main": [
+        [
+          {
+            "node": "INSERT inbound_routed_pending_IGOR_03",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT inbound_routed_pending_IGOR_03": {
+      "main": [
+        [
+          {
+            "node": "Redis DEL lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis DEL lock": {
+      "main": [
+        [
+          {
+            "node": "Resp routed_ai_after_hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resp routed_ai_after_hours": {
+      "main": [
+        [
+          {
+            "node": "Final Response Merge",
+            "type": "main",
+            "index": 9
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "pinData": null,
+  "versionId": "75a157ad-0c93-4fb9-b2be-106d9aa55b4c",
+  "activeVersionId": null,
+  "versionCounter": 2,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-05-15T05:10:20.976Z",
+      "createdAt": "2026-05-15T05:10:20.976Z",
+      "role": "workflow:owner",
+      "workflowId": "nC6ZhCVNn1fQiKfB",
+      "projectId": "fs6cR9FbpYN5UqeV",
+      "project": {
+        "updatedAt": "2026-05-13T17:58:36.522Z",
+        "createdAt": "2026-05-13T17:55:45.649Z",
+        "id": "fs6cR9FbpYN5UqeV",
+        "name": "Mateus Ferreira <alma.lancamentos@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "a87c56dc-b486-4ae8-8d42-3490e7d3610d"
+      }
+    }
+  ],
+  "tags": [
+    {
+      "updatedAt": "2026-05-15T03:51:59.510Z",
+      "createdAt": "2026-05-15T03:51:59.510Z",
+      "id": "PPrCQax3p4URUSyB",
+      "name": "igor"
+    },
+    {
+      "updatedAt": "2026-05-15T03:52:00.389Z",
+      "createdAt": "2026-05-15T03:52:00.389Z",
+      "id": "Taa30aYgiV2CoA35",
+      "name": "inbound"
+    },
+    {
+      "updatedAt": "2026-05-15T03:52:01.867Z",
+      "createdAt": "2026-05-15T03:52:01.867Z",
+      "id": "8MAvA3vn5AWx51Rw",
+      "name": "fase-b-rebuild"
+    },
+    {
+      "updatedAt": "2026-05-15T04:37:37.338Z",
+      "createdAt": "2026-05-15T04:37:37.338Z",
+      "id": "pPeOpT6l0jZwDk6P",
+      "name": "webhook"
+    },
+    {
+      "updatedAt": "2026-05-15T05:10:50.722Z",
+      "createdAt": "2026-05-15T05:10:50.722Z",
+      "id": "qFIJMrydevf1YPHf",
+      "name": "router"
+    }
+  ],
+  "activeVersion": null
+}

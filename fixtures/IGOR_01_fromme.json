@@ -1,0 +1,18 @@
+{
+  "event": "messages.upsert",
+  "instance": "dr_igor",
+  "data": {
+    "key": {
+      "id": "EVOLUTION_FIX_fromme_001",
+      "remoteJid": "5511999990803@s.whatsapp.net",
+      "fromMe": true
+    },
+    "messageType": "conversation",
+    "message": { "conversation": "Mensagem enviada pelo número do Instituto (deve ser bloqueada)" },
+    "messageTimestamp": 1779892800,
+    "pushName": "Instituto Dr. Igor"
+  },
+  "chatwoot_conversation_id": 9803,
+  "chatwoot_contact_id": 5803,
+  "additional_attributes": { "test_run_id": "IGOR_01_FIXTURE_fromme" }
+}
