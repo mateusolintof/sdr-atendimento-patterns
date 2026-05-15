@@ -145,7 +145,7 @@ const getCurrentLabels = node({
     name: 'GET Current Labels',
     parameters: {
       method: 'GET',
-      url: expr('={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $json.chatwoot_conversation_id }}/labels'),
+      url: expr('=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $json.chatwoot_conversation_id }}/labels'),
       authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth',
       sendHeaders: true,
@@ -205,7 +205,7 @@ const setMergedLabels = node({
     name: 'POST Merged Labels',
     parameters: {
       method: 'POST',
-      url: expr('={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $json.chatwoot_conversation_id }}/labels'),
+      url: expr('=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $json.chatwoot_conversation_id }}/labels'),
       authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth',
       sendHeaders: true,
@@ -367,7 +367,7 @@ const patchConversationAttrs = node({
     name: 'POST Conversation Attrs',
     parameters: {
       method: 'POST',
-      url: expr('={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $json.chatwoot_conversation_id }}/custom_attributes'),
+      url: expr('=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $json.chatwoot_conversation_id }}/custom_attributes'),
       authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth',
       sendHeaders: true,
@@ -517,7 +517,7 @@ const patchContactAttrs = node({
     name: 'PUT Contact Attrs',
     parameters: {
       method: 'PUT',
-      url: expr('={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/contacts/{{ $json.chatwoot_contact_id }}'),
+      url: expr('=https://chat.almaconvert.com.br/api/v1/accounts/2/contacts/{{ $json.chatwoot_contact_id }}'),
       authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth',
       sendHeaders: true,

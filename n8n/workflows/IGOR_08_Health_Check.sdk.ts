@@ -149,7 +149,7 @@ const n8nPing = node({
     name: 'n8n Ping',
     parameters: {
       method: 'GET',
-      url: expr('={{ $env.N8N_BASE_URL }}/healthz'),
+      url: expr('=https://n8n.almaconvert.com.br/healthz'),
       authentication: 'none',
       options: {
         timeout: 5000,
@@ -209,7 +209,7 @@ const chatwootPing = node({
     name: 'Chatwoot Ping',
     parameters: {
       method: 'GET',
-      url: expr('={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}'),
+      url: expr('=https://chat.almaconvert.com.br/api/v1/accounts/2'),
       authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth',
       options: {
@@ -273,7 +273,7 @@ const evolutionPing = node({
     name: 'Evolution Ping',
     parameters: {
       method: 'GET',
-      url: expr('={{ $env.EVOLUTION_BASE_URL }}/instance/connectionState/{{ $env.EVOLUTION_INSTANCE_NAME }}'),
+      url: expr('=https://evo.almaconvert.com.br/instance/connectionState/convert-teste'),
       authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth',
       options: {

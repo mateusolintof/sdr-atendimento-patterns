@@ -1,32 +1,49 @@
 {
+  "updatedAt": "2026-05-15T12:47:43.414Z",
+  "createdAt": "2026-05-15T03:15:21.708Z",
   "id": "AJF7dhGrqJEXMLqz",
   "name": "IGOR_04_Tool_Labels_Attributes",
+  "description": "IGOR_04: callable que mescla labels (GET current + add - remove) e PATCH custom_attributes em conversation/contact no Chatwoot. Sem LLM. Errors -> IGOR_07.",
   "active": false,
   "isArchived": false,
-  "description": "IGOR_04: callable que mescla labels (GET current + add - remove) e PATCH custom_attributes em conversation/contact no Chatwoot. Sem LLM. Errors -> IGOR_07.",
-  "settings": {
-    "executionOrder": "v1",
-    "availableInMCP": true,
-    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
-  },
-  "tags": ["igor", "inbound", "tool", "fase-b-rebuild"],
   "nodes": [
     {
       "id": "237835ce-f987-4dbf-a936-27d4e1ddd6da",
       "name": "Execute Workflow Trigger",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
-      "position": [0, 480],
+      "position": [
+        0,
+        480
+      ],
       "parameters": {
         "inputSource": "workflowInputs",
         "workflowInputs": {
           "values": [
-            {"name": "chatwoot_conversation_id", "type": "string"},
-            {"name": "chatwoot_contact_id", "type": "string"},
-            {"name": "labels_to_add", "type": "array"},
-            {"name": "labels_to_remove", "type": "array"},
-            {"name": "custom_attributes", "type": "object"},
-            {"name": "test_run_id", "type": "string"}
+            {
+              "name": "chatwoot_conversation_id",
+              "type": "string"
+            },
+            {
+              "name": "chatwoot_contact_id",
+              "type": "string"
+            },
+            {
+              "name": "labels_to_add",
+              "type": "array"
+            },
+            {
+              "name": "labels_to_remove",
+              "type": "array"
+            },
+            {
+              "name": "custom_attributes",
+              "type": "object"
+            },
+            {
+              "name": "test_run_id",
+              "type": "string"
+            }
           ]
         }
       }
@@ -36,7 +53,10 @@
       "name": "Validate Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [224, 480],
+      "position": [
+        224,
+        480
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
@@ -48,7 +68,10 @@
       "name": "Skip Labels?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [448, 96],
+      "position": [
+        448,
+        96
+      ],
       "parameters": {
         "conditions": {
           "combinator": "and",
@@ -57,10 +80,18 @@
               "id": "skip-labels-cond",
               "leftValue": "={{ $json._skip_labels }}",
               "rightValue": true,
-              "operator": {"type": "boolean", "operation": "true"}
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
             }
           ],
-          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2}
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
         }
       }
     },
@@ -69,14 +100,32 @@
       "name": "Labels Branch Skipped",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1568, 0],
+      "position": [
+        1568,
+        0
+      ],
       "parameters": {
         "mode": "manual",
         "assignments": {
           "assignments": [
-            {"id": "labels-branch-source-skip", "name": "branch", "value": "labels_skipped", "type": "string"},
-            {"id": "labels-added-out-skip", "name": "labels_added", "value": "={{ [] }}", "type": "array"},
-            {"id": "labels-removed-out-skip", "name": "labels_removed", "value": "={{ [] }}", "type": "array"}
+            {
+              "id": "labels-branch-source-skip",
+              "name": "branch",
+              "value": "labels_skipped",
+              "type": "string"
+            },
+            {
+              "id": "labels-added-out-skip",
+              "name": "labels_added",
+              "value": "={{ [] }}",
+              "type": "array"
+            },
+            {
+              "id": "labels-removed-out-skip",
+              "name": "labels_removed",
+              "value": "={{ [] }}",
+              "type": "array"
+            }
           ]
         },
         "options": {}
@@ -87,30 +136,54 @@
       "name": "Merge Branches",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
-      "position": [1792, 464],
-      "parameters": {"mode": "append", "numberInputs": 3}
+      "position": [
+        1792,
+        464
+      ],
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 3
+      }
     },
     {
       "id": "fde3284d-0ce7-4d77-a691-9bc16c8c799c",
       "name": "GET Current Labels",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [672, 192],
+      "position": [
+        672,
+        192
+      ],
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $json.chatwoot_conversation_id }}/labels",
+        "url": "=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $json.chatwoot_conversation_id }}/labels",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "specifyHeaders": "keypair",
-        "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "options": {
-          "response": {"response": {"neverError": false, "responseFormat": "json"}},
+          "response": {
+            "response": {
+              "neverError": false,
+              "responseFormat": "json"
+            }
+          },
           "timeout": 15000
         }
       },
       "credentials": {
-        "httpHeaderAuth": {"name": "igor_chatwoot_api"}
+        "httpHeaderAuth": {
+          "id": "x8StLhAFnYjQxUFg",
+          "name": "igor_chatwoot_api"
+        }
       }
     },
     {
@@ -118,7 +191,10 @@
       "name": "Merge Labels",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [896, 192],
+      "position": [
+        896,
+        192
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
@@ -130,26 +206,44 @@
       "name": "POST Merged Labels",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [1120, 192],
+      "position": [
+        1120,
+        192
+      ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $json.chatwoot_conversation_id }}/labels",
+        "url": "=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $json.chatwoot_conversation_id }}/labels",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "specifyHeaders": "keypair",
-        "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ labels: $json.merged_labels }) }}",
         "options": {
-          "response": {"response": {"neverError": false, "responseFormat": "json"}},
+          "response": {
+            "response": {
+              "neverError": false,
+              "responseFormat": "json"
+            }
+          },
           "timeout": 15000
         }
       },
       "credentials": {
-        "httpHeaderAuth": {"name": "igor_chatwoot_api"}
+        "httpHeaderAuth": {
+          "id": "x8StLhAFnYjQxUFg",
+          "name": "igor_chatwoot_api"
+        }
       }
     },
     {
@@ -157,7 +251,10 @@
       "name": "Log Label Events",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [1344, 192],
+      "position": [
+        1344,
+        192
+      ],
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO public.events (event_type, workflow_name, payload)\nSELECT\n  (elem->>'event_type'),\n  'IGOR_04_Tool_Labels_Attributes',\n  (elem->'payload')\nFROM jsonb_array_elements($1::jsonb) AS elem\nWHERE jsonb_typeof($1::jsonb) = 'array'\n  AND jsonb_array_length($1::jsonb) > 0;",
@@ -166,7 +263,10 @@
         }
       },
       "credentials": {
-        "postgres": {"name": "igor_supabase_postgres"}
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
       }
     },
     {
@@ -174,14 +274,32 @@
       "name": "Labels Branch Output",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1568, 192],
+      "position": [
+        1568,
+        192
+      ],
       "parameters": {
         "mode": "manual",
         "assignments": {
           "assignments": [
-            {"id": "labels-branch-source", "name": "branch", "value": "labels", "type": "string"},
-            {"id": "labels-added-out", "name": "labels_added", "value": "={{ $('Merge Labels').first().json.added_deltas }}", "type": "array"},
-            {"id": "labels-removed-out", "name": "labels_removed", "value": "={{ $('Merge Labels').first().json.removed_deltas }}", "type": "array"}
+            {
+              "id": "labels-branch-source",
+              "name": "branch",
+              "value": "labels",
+              "type": "string"
+            },
+            {
+              "id": "labels-added-out",
+              "name": "labels_added",
+              "value": "={{ $('Merge Labels').first().json.added_deltas }}",
+              "type": "array"
+            },
+            {
+              "id": "labels-removed-out",
+              "name": "labels_removed",
+              "value": "={{ $('Merge Labels').first().json.removed_deltas }}",
+              "type": "array"
+            }
           ]
         },
         "options": {}
@@ -192,7 +310,10 @@
       "name": "Skip Attrs Conversation?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [896, 480],
+      "position": [
+        896,
+        480
+      ],
       "parameters": {
         "conditions": {
           "combinator": "and",
@@ -201,10 +322,18 @@
               "id": "skip-attrs-conv-cond",
               "leftValue": "={{ $json._skip_attrs_conversation }}",
               "rightValue": true,
-              "operator": {"type": "boolean", "operation": "true"}
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
             }
           ],
-          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2}
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
         }
       }
     },
@@ -213,13 +342,26 @@
       "name": "Attrs Conversation Skipped",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1568, 384],
+      "position": [
+        1568,
+        384
+      ],
       "parameters": {
         "mode": "manual",
         "assignments": {
           "assignments": [
-            {"id": "attrs-conv-branch-source-skip", "name": "branch", "value": "attrs_conversation_skipped", "type": "string"},
-            {"id": "attrs-conv-keys-out-skip", "name": "attrs_conversation_keys", "value": "={{ [] }}", "type": "array"}
+            {
+              "id": "attrs-conv-branch-source-skip",
+              "name": "branch",
+              "value": "attrs_conversation_skipped",
+              "type": "string"
+            },
+            {
+              "id": "attrs-conv-keys-out-skip",
+              "name": "attrs_conversation_keys",
+              "value": "={{ [] }}",
+              "type": "array"
+            }
           ]
         },
         "options": {}
@@ -230,26 +372,44 @@
       "name": "POST Conversation Attrs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [1120, 576],
+      "position": [
+        1120,
+        576
+      ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $json.chatwoot_conversation_id }}/custom_attributes",
+        "url": "=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $json.chatwoot_conversation_id }}/custom_attributes",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "specifyHeaders": "keypair",
-        "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ custom_attributes: $json.custom_attributes.conversation }) }}",
         "options": {
-          "response": {"response": {"neverError": false, "responseFormat": "json"}},
+          "response": {
+            "response": {
+              "neverError": false,
+              "responseFormat": "json"
+            }
+          },
           "timeout": 15000
         }
       },
       "credentials": {
-        "httpHeaderAuth": {"name": "igor_chatwoot_api"}
+        "httpHeaderAuth": {
+          "id": "x8StLhAFnYjQxUFg",
+          "name": "igor_chatwoot_api"
+        }
       }
     },
     {
@@ -257,7 +417,10 @@
       "name": "Log Conversation Attr Event",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [1344, 576],
+      "position": [
+        1344,
+        576
+      ],
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO public.events (event_type, workflow_name, payload)\nVALUES ('attribute_set', 'IGOR_04_Tool_Labels_Attributes', $1::jsonb);",
@@ -266,7 +429,10 @@
         }
       },
       "credentials": {
-        "postgres": {"name": "igor_supabase_postgres"}
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
       }
     },
     {
@@ -274,13 +440,26 @@
       "name": "Attrs Conversation Output",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1568, 576],
+      "position": [
+        1568,
+        576
+      ],
       "parameters": {
         "mode": "manual",
         "assignments": {
           "assignments": [
-            {"id": "attrs-conv-branch-source", "name": "branch", "value": "attrs_conversation", "type": "string"},
-            {"id": "attrs-conv-keys-out", "name": "attrs_conversation_keys", "value": "={{ $('Validate Payload').first().json.attrs_conversation_keys }}", "type": "array"}
+            {
+              "id": "attrs-conv-branch-source",
+              "name": "branch",
+              "value": "attrs_conversation",
+              "type": "string"
+            },
+            {
+              "id": "attrs-conv-keys-out",
+              "name": "attrs_conversation_keys",
+              "value": "={{ $('Validate Payload').first().json.attrs_conversation_keys }}",
+              "type": "array"
+            }
           ]
         },
         "options": {}
@@ -291,7 +470,10 @@
       "name": "Skip Attrs Contact?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [896, 864],
+      "position": [
+        896,
+        864
+      ],
       "parameters": {
         "conditions": {
           "combinator": "and",
@@ -300,10 +482,18 @@
               "id": "skip-attrs-contact-cond",
               "leftValue": "={{ $json._skip_attrs_contact }}",
               "rightValue": true,
-              "operator": {"type": "boolean", "operation": "true"}
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
             }
           ],
-          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2}
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          }
         }
       }
     },
@@ -312,13 +502,26 @@
       "name": "Attrs Contact Skipped",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1568, 768],
+      "position": [
+        1568,
+        768
+      ],
       "parameters": {
         "mode": "manual",
         "assignments": {
           "assignments": [
-            {"id": "attrs-contact-branch-source-skip", "name": "branch", "value": "attrs_contact_skipped", "type": "string"},
-            {"id": "attrs-contact-keys-out-skip", "name": "attrs_contact_keys", "value": "={{ [] }}", "type": "array"}
+            {
+              "id": "attrs-contact-branch-source-skip",
+              "name": "branch",
+              "value": "attrs_contact_skipped",
+              "type": "string"
+            },
+            {
+              "id": "attrs-contact-keys-out-skip",
+              "name": "attrs_contact_keys",
+              "value": "={{ [] }}",
+              "type": "array"
+            }
           ]
         },
         "options": {}
@@ -329,26 +532,44 @@
       "name": "PUT Contact Attrs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [1120, 960],
+      "position": [
+        1120,
+        960
+      ],
       "parameters": {
         "method": "PUT",
-        "url": "={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/contacts/{{ $json.chatwoot_contact_id }}",
+        "url": "=https://chat.almaconvert.com.br/api/v1/accounts/2/contacts/{{ $json.chatwoot_contact_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "specifyHeaders": "keypair",
-        "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "contentType": "json",
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ custom_attributes: $json.custom_attributes.contact }) }}",
         "options": {
-          "response": {"response": {"neverError": false, "responseFormat": "json"}},
+          "response": {
+            "response": {
+              "neverError": false,
+              "responseFormat": "json"
+            }
+          },
           "timeout": 15000
         }
       },
       "credentials": {
-        "httpHeaderAuth": {"name": "igor_chatwoot_api"}
+        "httpHeaderAuth": {
+          "id": "x8StLhAFnYjQxUFg",
+          "name": "igor_chatwoot_api"
+        }
       }
     },
     {
@@ -356,7 +577,10 @@
       "name": "Log Contact Attr Event",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [1344, 960],
+      "position": [
+        1344,
+        960
+      ],
       "parameters": {
         "operation": "executeQuery",
         "query": "INSERT INTO public.events (event_type, workflow_name, payload)\nVALUES ('attribute_set', 'IGOR_04_Tool_Labels_Attributes', $1::jsonb);",
@@ -365,7 +589,10 @@
         }
       },
       "credentials": {
-        "postgres": {"name": "igor_supabase_postgres"}
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
       }
     },
     {
@@ -373,13 +600,26 @@
       "name": "Attrs Contact Output",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1568, 960],
+      "position": [
+        1568,
+        960
+      ],
       "parameters": {
         "mode": "manual",
         "assignments": {
           "assignments": [
-            {"id": "attrs-contact-branch-source", "name": "branch", "value": "attrs_contact", "type": "string"},
-            {"id": "attrs-contact-keys-out", "name": "attrs_contact_keys", "value": "={{ $('Validate Payload').first().json.attrs_contact_keys }}", "type": "array"}
+            {
+              "id": "attrs-contact-branch-source",
+              "name": "branch",
+              "value": "attrs_contact",
+              "type": "string"
+            },
+            {
+              "id": "attrs-contact-keys-out",
+              "name": "attrs_contact_keys",
+              "value": "={{ $('Validate Payload').first().json.attrs_contact_keys }}",
+              "type": "array"
+            }
           ]
         },
         "options": {}
@@ -390,17 +630,50 @@
       "name": "Final Summary",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [2016, 480],
+      "position": [
+        2016,
+        480
+      ],
       "parameters": {
         "mode": "manual",
         "assignments": {
           "assignments": [
-            {"id": "ok-flag", "name": "ok", "value": true, "type": "boolean"},
-            {"id": "sum-labels-added", "name": "labels_added", "value": "={{ $input.all().reduce((acc, x) => acc.concat(Array.isArray(x.json.labels_added) ? x.json.labels_added : []), []) }}", "type": "array"},
-            {"id": "sum-labels-removed", "name": "labels_removed", "value": "={{ $input.all().reduce((acc, x) => acc.concat(Array.isArray(x.json.labels_removed) ? x.json.labels_removed : []), []) }}", "type": "array"},
-            {"id": "sum-attrs-conv-keys", "name": "attrs_conversation_keys", "value": "={{ $input.all().reduce((acc, x) => acc.concat(Array.isArray(x.json.attrs_conversation_keys) ? x.json.attrs_conversation_keys : []), []) }}", "type": "array"},
-            {"id": "sum-attrs-contact-keys", "name": "attrs_contact_keys", "value": "={{ $input.all().reduce((acc, x) => acc.concat(Array.isArray(x.json.attrs_contact_keys) ? x.json.attrs_contact_keys : []), []) }}", "type": "array"},
-            {"id": "test-run-id-out", "name": "test_run_id", "value": "={{ $('Validate Payload').first().json.test_run_id }}", "type": "string"}
+            {
+              "id": "ok-flag",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "sum-labels-added",
+              "name": "labels_added",
+              "value": "={{ $input.all().reduce((acc, x) => acc.concat(Array.isArray(x.json.labels_added) ? x.json.labels_added : []), []) }}",
+              "type": "array"
+            },
+            {
+              "id": "sum-labels-removed",
+              "name": "labels_removed",
+              "value": "={{ $input.all().reduce((acc, x) => acc.concat(Array.isArray(x.json.labels_removed) ? x.json.labels_removed : []), []) }}",
+              "type": "array"
+            },
+            {
+              "id": "sum-attrs-conv-keys",
+              "name": "attrs_conversation_keys",
+              "value": "={{ $input.all().reduce((acc, x) => acc.concat(Array.isArray(x.json.attrs_conversation_keys) ? x.json.attrs_conversation_keys : []), []) }}",
+              "type": "array"
+            },
+            {
+              "id": "sum-attrs-contact-keys",
+              "name": "attrs_contact_keys",
+              "value": "={{ $input.all().reduce((acc, x) => acc.concat(Array.isArray(x.json.attrs_contact_keys) ? x.json.attrs_contact_keys : []), []) }}",
+              "type": "array"
+            },
+            {
+              "id": "test-run-id-out",
+              "name": "test_run_id",
+              "value": "={{ $('Validate Payload').first().json.test_run_id }}",
+              "type": "string"
+            }
           ]
         },
         "options": {},
@@ -411,77 +684,316 @@
   ],
   "connections": {
     "Execute Workflow Trigger": {
-      "main": [[{"node": "Validate Payload", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Validate Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Validate Payload": {
-      "main": [[
-        {"node": "Skip Labels?", "type": "main", "index": 0},
-        {"node": "Skip Attrs Conversation?", "type": "main", "index": 0},
-        {"node": "Skip Attrs Contact?", "type": "main", "index": 0}
-      ]]
+      "main": [
+        [
+          {
+            "node": "Skip Labels?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Skip Attrs Conversation?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Skip Attrs Contact?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Skip Labels?": {
       "main": [
-        [{"node": "Labels Branch Skipped", "type": "main", "index": 0}],
-        [{"node": "GET Current Labels", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Labels Branch Skipped",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GET Current Labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Labels Branch Skipped": {
-      "main": [[{"node": "Merge Branches", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "GET Current Labels": {
-      "main": [[{"node": "Merge Labels", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Merge Labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Merge Labels": {
-      "main": [[{"node": "POST Merged Labels", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "POST Merged Labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "POST Merged Labels": {
-      "main": [[{"node": "Log Label Events", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Log Label Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Label Events": {
-      "main": [[{"node": "Labels Branch Output", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Labels Branch Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Labels Branch Output": {
-      "main": [[{"node": "Merge Branches", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Skip Attrs Conversation?": {
       "main": [
-        [{"node": "Attrs Conversation Skipped", "type": "main", "index": 0}],
-        [{"node": "POST Conversation Attrs", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Attrs Conversation Skipped",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "POST Conversation Attrs",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Attrs Conversation Skipped": {
-      "main": [[{"node": "Merge Branches", "type": "main", "index": 1}]]
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
     },
     "POST Conversation Attrs": {
-      "main": [[{"node": "Log Conversation Attr Event", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Log Conversation Attr Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Conversation Attr Event": {
-      "main": [[{"node": "Attrs Conversation Output", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Attrs Conversation Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Attrs Conversation Output": {
-      "main": [[{"node": "Merge Branches", "type": "main", "index": 1}]]
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
     },
     "Skip Attrs Contact?": {
       "main": [
-        [{"node": "Attrs Contact Skipped", "type": "main", "index": 0}],
-        [{"node": "PUT Contact Attrs", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Attrs Contact Skipped",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PUT Contact Attrs",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Attrs Contact Skipped": {
-      "main": [[{"node": "Merge Branches", "type": "main", "index": 2}]]
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
     },
     "PUT Contact Attrs": {
-      "main": [[{"node": "Log Contact Attr Event", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Log Contact Attr Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Contact Attr Event": {
-      "main": [[{"node": "Attrs Contact Output", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Attrs Contact Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Attrs Contact Output": {
-      "main": [[{"node": "Merge Branches", "type": "main", "index": 2}]]
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
     },
     "Merge Branches": {
-      "main": [[{"node": "Final Summary", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Final Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
-  }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "pinData": null,
+  "versionId": "81635db6-78bf-4c21-8477-a1093bde35ea",
+  "activeVersionId": null,
+  "versionCounter": 2,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-05-15T03:15:21.708Z",
+      "createdAt": "2026-05-15T03:15:21.708Z",
+      "role": "workflow:owner",
+      "workflowId": "AJF7dhGrqJEXMLqz",
+      "projectId": "fs6cR9FbpYN5UqeV",
+      "project": {
+        "updatedAt": "2026-05-13T17:58:36.522Z",
+        "createdAt": "2026-05-13T17:55:45.649Z",
+        "id": "fs6cR9FbpYN5UqeV",
+        "name": "Mateus Ferreira <alma.lancamentos@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "a87c56dc-b486-4ae8-8d42-3490e7d3610d"
+      }
+    }
+  ],
+  "tags": [
+    {
+      "updatedAt": "2026-05-15T03:51:59.510Z",
+      "createdAt": "2026-05-15T03:51:59.510Z",
+      "id": "PPrCQax3p4URUSyB",
+      "name": "igor"
+    },
+    {
+      "updatedAt": "2026-05-15T03:52:00.389Z",
+      "createdAt": "2026-05-15T03:52:00.389Z",
+      "id": "Taa30aYgiV2CoA35",
+      "name": "inbound"
+    },
+    {
+      "updatedAt": "2026-05-15T12:49:04.646Z",
+      "createdAt": "2026-05-15T12:49:04.646Z",
+      "id": "YmIptT9JFusCV5MH",
+      "name": "tool"
+    },
+    {
+      "updatedAt": "2026-05-15T03:52:01.867Z",
+      "createdAt": "2026-05-15T03:52:01.867Z",
+      "id": "8MAvA3vn5AWx51Rw",
+      "name": "fase-b-rebuild"
+    }
+  ],
+  "activeVersion": null
 }

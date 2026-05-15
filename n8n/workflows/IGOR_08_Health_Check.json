@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-15T10:02:09.788Z",
+  "updatedAt": "2026-05-15T12:52:44.068Z",
   "createdAt": "2026-05-15T04:13:29.097Z",
   "id": "cDpDA1QdIH9wHAlN",
   "name": "IGOR_08_Health_Check",
@@ -53,7 +53,7 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.N8N_BASE_URL }}/healthz",
+        "url": "=https://n8n.almaconvert.com.br/healthz",
         "authentication": "none",
         "options": {
           "timeout": 5000,
@@ -107,7 +107,7 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}",
+        "url": "=https://chat.almaconvert.com.br/api/v1/accounts/2",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {
@@ -154,7 +154,7 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.EVOLUTION_BASE_URL }}/instance/connectionState/{{ $env.EVOLUTION_INSTANCE_NAME }}",
+        "url": "=https://evo.almaconvert.com.br/instance/connectionState/convert-teste",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {
@@ -714,7 +714,10 @@
   "settings": {
     "executionOrder": "v1",
     "availableInMCP": true,
-    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
+    "errorWorkflow": "ZrsbaSTlW5bqMEaS",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
   },
   "staticData": null,
   "meta": {
@@ -722,9 +725,9 @@
     "builderVariant": "mcp"
   },
   "pinData": null,
-  "versionId": "b6ad2db1-c843-48f4-b4f9-c888c1ce17a4",
+  "versionId": "48bba385-6735-4a6f-8cf1-03a79f9cffb7",
   "activeVersionId": null,
-  "versionCounter": 3,
+  "versionCounter": 6,
   "triggerCount": 0,
   "shared": [
     {

@@ -137,9 +137,9 @@ const validatePayload = node({
         "  const ownerFlow = str(j.owner_flow) || 'after_hours';",
         "  const testRunId = str(j.test_run_id);",
         "  const handoffAt = new Date().toISOString();",
-        "  // Send-gate env",
-        "  const allowReal = String(process.env.ALLOW_REAL_WHATSAPP_SEND || '').toLowerCase() === 'true';",
-        "  const dryRun = String(process.env.IGOR_DRY_RUN || '').toLowerCase() === 'true';",
+        "  // Send-gate from settings table (Load Gates postgres node)",
+        "  const allowReal = $('Load Gates').first().json.allow_real_whatsapp_send === true;",
+        "  const dryRun = $('Load Gates').first().json.dry_run_send === true;",
         "  const shouldSendReal = allowReal && !dryRun;",
         "  const sendGateReason = shouldSendReal",
         "    ? 'real_send_authorized'",
@@ -251,7 +251,7 @@ const updateConversation = node({
       ].join('\n'),
       options: {
         queryReplacement: expr(
-          "={{ [($env.CHATWOOT_HUMAN_TEAM_ID || ''), $('Validate Payload').first().json.chatwoot_conversation_id] }}"
+          "={{ ['1', $('Validate Payload').first().json.chatwoot_conversation_id] }}"
         ),
       },
     },
@@ -403,7 +403,7 @@ const postPrivateNote = node({
     parameters: {
       method: 'POST',
       url: expr(
-        "={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Validate Payload').first().json.chatwoot_conversation_id }}/messages"
+        "=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $('Validate Payload').first().json.chatwoot_conversation_id }}/messages"
       ),
       authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth',
@@ -451,7 +451,7 @@ const postAssignTeam = node({
     parameters: {
       method: 'POST',
       url: expr(
-        "={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Validate Payload').first().json.chatwoot_conversation_id }}/assignments"
+        "=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $('Validate Payload').first().json.chatwoot_conversation_id }}/assignments"
       ),
       authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth',
@@ -466,7 +466,7 @@ const postAssignTeam = node({
       contentType: 'json',
       specifyBody: 'json',
       jsonBody: expr(
-        "={{ JSON.stringify({ team_id: parseInt($env.CHATWOOT_HUMAN_TEAM_ID || '0', 10) }) }}"
+        "={{ JSON.stringify({ team_id: 1 }) }}"
       ),
       options: {
         response: {
@@ -501,7 +501,7 @@ const hasAssigneeIf = ifElse({
         conditions: [
           {
             id: 'has-assignee-cond',
-            leftValue: expr("={{ ($env.CHATWOOT_HUMAN_ASSIGNEE_ID || '').trim() }}"),
+            leftValue: expr("=1"),
             rightValue: '',
             operator: { type: 'string', operation: 'notEmpty' },
           },
@@ -526,7 +526,7 @@ const postAssignAssignee = node({
     parameters: {
       method: 'POST',
       url: expr(
-        "={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}/conversations/{{ $('Validate Payload').first().json.chatwoot_conversation_id }}/assignments"
+        "=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $('Validate Payload').first().json.chatwoot_conversation_id }}/assignments"
       ),
       authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth',
@@ -541,7 +541,7 @@ const postAssignAssignee = node({
       contentType: 'json',
       specifyBody: 'json',
       jsonBody: expr(
-        "={{ JSON.stringify({ assignee_id: parseInt($env.CHATWOOT_HUMAN_ASSIGNEE_ID || '0', 10) }) }}"
+        "={{ JSON.stringify({ assignee_id: 1 }) }}"
       ),
       options: {
         response: {
@@ -700,7 +700,7 @@ const sendEvolutionText = node({
     parameters: {
       method: 'POST',
       url: expr(
-        "={{ $env.EVOLUTION_BASE_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE_NAME }}"
+        "=https://evo.almaconvert.com.br/message/sendText/convert-teste"
       ),
       authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth',

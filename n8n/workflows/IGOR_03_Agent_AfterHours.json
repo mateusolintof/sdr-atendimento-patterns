@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-05-15T10:02:11.509Z",
+  "updatedAt": "2026-05-15T13:23:37.272Z",
   "createdAt": "2026-05-15T05:52:30.477Z",
   "id": "iQCVbe1P8dC0vhay",
   "name": "IGOR_03_Agent_AfterHours",
@@ -65,6 +65,28 @@
       }
     },
     {
+      "id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      "name": "Load Gates",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        112,
+        144
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE((SELECT (value)::text::boolean FROM public.settings WHERE key='dry_run_send'), true) AS dry_run_send, COALESCE((SELECT (value)::text::boolean FROM public.settings WHERE key='allow_real_whatsapp_send'), false) AS allow_real_whatsapp_send;",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
       "id": "9bdbf43b-5c23-4144-964b-0dc81b47ebca",
       "name": "Validate Payload",
       "type": "n8n-nodes-base.code",
@@ -75,7 +97,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const phone = (j.phone === undefined || j.phone === null) ? '' : String(j.phone).trim();\n  const msgId = (j.msgId === undefined || j.msgId === null) ? '' : String(j.msgId).trim();\n  const convId = (j.chatwoot_conversation_id === undefined || j.chatwoot_conversation_id === null) ? '' : String(j.chatwoot_conversation_id).trim();\n  const contactId = (j.chatwoot_contact_id === undefined || j.chatwoot_contact_id === null) ? '' : String(j.chatwoot_contact_id).trim();\n  const normalizedText = (j.normalized_text === undefined || j.normalized_text === null) ? '' : String(j.normalized_text);\n  let safetyFlags = j.safety_flags;\n  if (typeof safetyFlags === 'string') {\n    try { safetyFlags = JSON.parse(safetyFlags); } catch (e) { safetyFlags = {}; }\n  }\n  if (!safetyFlags || typeof safetyFlags !== 'object' || Array.isArray(safetyFlags)) safetyFlags = {};\n  const clinical = safetyFlags.clinical === true;\n  const sensitiveImage = safetyFlags.sensitive_image === true;\n  const paymentProof = safetyFlags.payment_proof === true;\n  const shouldHandoff = j.should_handoff === true || j.should_handoff === 'true';\n  const handoffReason = (j.handoff_reason === undefined || j.handoff_reason === null) ? '' : String(j.handoff_reason);\n  const fragmentsCount = (typeof j.fragments_count === 'number') ? j.fragments_count : (parseInt(j.fragments_count, 10) || 1);\n  const testRunId = (j.test_run_id === undefined || j.test_run_id === null) ? '' : String(j.test_run_id);\n  const isCompliance = shouldHandoff || clinical || sensitiveImage || paymentProof;\n  let resolvedHandoffReason = handoffReason;\n  if (!resolvedHandoffReason || resolvedHandoffReason === '') {\n    if (clinical) resolvedHandoffReason = 'documento_clinico_sensivel';\n    else if (sensitiveImage) resolvedHandoffReason = 'imagem_sensivel';\n    else if (paymentProof) resolvedHandoffReason = 'comprovante_pagamento';\n    else if (shouldHandoff) resolvedHandoffReason = 'safety_flag_generic';\n  }\n  const allowRealRaw = (typeof process !== 'undefined' && process.env && process.env.ALLOW_REAL_WHATSAPP_SEND) ? String(process.env.ALLOW_REAL_WHATSAPP_SEND).toLowerCase() : 'false';\n  const dryRunRaw = (typeof process !== 'undefined' && process.env && process.env.IGOR_DRY_RUN) ? String(process.env.IGOR_DRY_RUN).toLowerCase() : 'true';\n  const allowReal = allowRealRaw === 'true';\n  const dryRun = dryRunRaw === 'true';\n  const shouldSendReal = allowReal && !dryRun;\n  let sendGateReason;\n  if (shouldSendReal) sendGateReason = 'allow_real_true_and_dry_run_false';\n  else if (!allowReal) sendGateReason = 'allow_real_whatsapp_send_not_true';\n  else sendGateReason = 'igor_dry_run_true';\n  const sessionKey = 'after_hours_' + phone;\n  const igor05CompliancePayload = {\n    chatwoot_conversation_id: convId,\n    chatwoot_contact_id: contactId,\n    lead_id: '',\n    handoff_reason: resolvedHandoffReason,\n    summary: 'Midia/conteudo sensivel detectado pelo normalizer.',\n    callback_period: '',\n    owner_flow: 'after_hours',\n    test_run_id: testRunId,\n  };\n  return {\n    json: {\n      phone,\n      msg_id: msgId,\n      chatwoot_conversation_id: convId,\n      chatwoot_contact_id: contactId,\n      normalized_text: normalizedText,\n      safety_flags: safetyFlags,\n      should_handoff: shouldHandoff,\n      handoff_reason: resolvedHandoffReason,\n      fragments_count: fragmentsCount,\n      test_run_id: testRunId,\n      _is_compliance: isCompliance,\n      _safety_clinical: clinical,\n      _safety_sensitive_image: sensitiveImage,\n      _safety_payment_proof: paymentProof,\n      _allow_real_whatsapp_send: allowReal,\n      _igor_dry_run: dryRun,\n      _should_send_real: shouldSendReal,\n      _send_gate_reason: sendGateReason,\n      session_key: sessionKey,\n      igor05_compliance_payload: igor05CompliancePayload,\n      igor05_compliance_payload_json: JSON.stringify(igor05CompliancePayload),\n    },\n  };\n});"
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const phone = (j.phone === undefined || j.phone === null) ? '' : String(j.phone).trim();\n  const msgId = (j.msgId === undefined || j.msgId === null) ? '' : String(j.msgId).trim();\n  const convId = (j.chatwoot_conversation_id === undefined || j.chatwoot_conversation_id === null) ? '' : String(j.chatwoot_conversation_id).trim();\n  const contactId = (j.chatwoot_contact_id === undefined || j.chatwoot_contact_id === null) ? '' : String(j.chatwoot_contact_id).trim();\n  const normalizedText = (j.normalized_text === undefined || j.normalized_text === null) ? '' : String(j.normalized_text);\n  let safetyFlags = j.safety_flags;\n  if (typeof safetyFlags === 'string') {\n    try { safetyFlags = JSON.parse(safetyFlags); } catch (e) { safetyFlags = {}; }\n  }\n  if (!safetyFlags || typeof safetyFlags !== 'object' || Array.isArray(safetyFlags)) safetyFlags = {};\n  const clinical = safetyFlags.clinical === true;\n  const sensitiveImage = safetyFlags.sensitive_image === true;\n  const paymentProof = safetyFlags.payment_proof === true;\n  const shouldHandoff = j.should_handoff === true || j.should_handoff === 'true';\n  const handoffReason = (j.handoff_reason === undefined || j.handoff_reason === null) ? '' : String(j.handoff_reason);\n  const fragmentsCount = (typeof j.fragments_count === 'number') ? j.fragments_count : (parseInt(j.fragments_count, 10) || 1);\n  const testRunId = (j.test_run_id === undefined || j.test_run_id === null) ? '' : String(j.test_run_id);\n  const isCompliance = shouldHandoff || clinical || sensitiveImage || paymentProof;\n  let resolvedHandoffReason = handoffReason;\n  if (!resolvedHandoffReason || resolvedHandoffReason === '') {\n    if (clinical) resolvedHandoffReason = 'documento_clinico_sensivel';\n    else if (sensitiveImage) resolvedHandoffReason = 'imagem_sensivel';\n    else if (paymentProof) resolvedHandoffReason = 'comprovante_pagamento';\n    else if (shouldHandoff) resolvedHandoffReason = 'safety_flag_generic';\n  }\n  // Gates from settings table (Load Gates postgres node)\n  const allowReal = $('Load Gates').first().json.allow_real_whatsapp_send === true;\n  const dryRun = $('Load Gates').first().json.dry_run_send === true;\n  const shouldSendReal = allowReal && !dryRun;\n  let sendGateReason;\n  if (shouldSendReal) sendGateReason = 'allow_real_true_and_dry_run_false';\n  else if (!allowReal) sendGateReason = 'allow_real_whatsapp_send_not_true';\n  else sendGateReason = 'igor_dry_run_true';\n  const sessionKey = 'after_hours_' + phone;\n  const igor05CompliancePayload = {\n    chatwoot_conversation_id: convId,\n    chatwoot_contact_id: contactId,\n    lead_id: '',\n    handoff_reason: resolvedHandoffReason,\n    summary: 'Midia/conteudo sensivel detectado pelo normalizer.',\n    callback_period: '',\n    owner_flow: 'after_hours',\n    test_run_id: testRunId,\n  };\n  return {\n    json: {\n      phone,\n      msg_id: msgId,\n      chatwoot_conversation_id: convId,\n      chatwoot_contact_id: contactId,\n      normalized_text: normalizedText,\n      safety_flags: safetyFlags,\n      should_handoff: shouldHandoff,\n      handoff_reason: resolvedHandoffReason,\n      fragments_count: fragmentsCount,\n      test_run_id: testRunId,\n      _is_compliance: isCompliance,\n      _safety_clinical: clinical,\n      _safety_sensitive_image: sensitiveImage,\n      _safety_payment_proof: paymentProof,\n      _allow_real_whatsapp_send: allowReal,\n      _igor_dry_run: dryRun,\n      _should_send_real: shouldSendReal,\n      _send_gate_reason: sendGateReason,\n      session_key: sessionKey,\n      igor05_compliance_payload: igor05CompliancePayload,\n      igor05_compliance_payload_json: JSON.stringify(igor05CompliancePayload),\n    },\n  };\n});"
       }
     },
     {
@@ -850,7 +872,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.EVOLUTION_BASE_URL }}/chat/sendPresence/{{ $env.EVOLUTION_INSTANCE_NAME }}",
+        "url": "=https://evo.almaconvert.com.br/chat/sendPresence/convert-teste",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -928,7 +950,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.EVOLUTION_BASE_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCE_NAME }}",
+        "url": "=https://evo.almaconvert.com.br/message/sendText/convert-teste",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -1060,7 +1082,7 @@
       "main": [
         [
           {
-            "node": "Validate Payload",
+            "node": "Load Gates",
             "type": "main",
             "index": 0
           }
@@ -1340,6 +1362,17 @@
           }
         ]
       ]
+    },
+    "Load Gates": {
+      "main": [
+        [
+          {
+            "node": "Validate Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -1353,9 +1386,9 @@
     "builderVariant": "mcp"
   },
   "pinData": null,
-  "versionId": "6c340a7b-686f-4ddb-a94e-d62fbaa5933a",
+  "versionId": "3989022b-16f6-400c-9115-73a5113cd068",
   "activeVersionId": null,
-  "versionCounter": 3,
+  "versionCounter": 4,
   "triggerCount": 0,
   "shared": [
     {
