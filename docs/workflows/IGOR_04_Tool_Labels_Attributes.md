@@ -22,9 +22,10 @@
 ```
 
 ## Gates aplicados
-- `errorWorkflow: ZrsbaSTlW5bqMEaS` (IGOR_07_Error_Logger) — **a setar manualmente no UI**: o create via MCP não persiste `settings.errorWorkflow`. Após import o usuário deve editar o workflow no UI → Settings → Error Workflow → IGOR_07.
-- `active: false` por padrão. Ativação manual no UI após validação em Fase C.
-- `tags: ['igor', 'inbound', 'tool', 'fase-b-rebuild']` — **a setar manualmente no UI**: tags não foram persistidas pelo create do MCP.
+- `errorWorkflow: ZrsbaSTlW5bqMEaS` (IGOR_07_Error_Logger) — **persistido no JSON canônico** (`settings.errorWorkflow`). Aplicado automaticamente quando o workflow é importado via JSON ou via n8n REST API. Verifique no UI se um reimport from SDK ocorrer (vide nota em `IGOR_04_Tool_Labels_Attributes.sdk.ts`).
+- `active: false` por padrão — **persistido no JSON canônico**. Ativação manual no UI após validação em Fase C.
+- `tags: ['igor', 'inbound', 'tool', 'fase-b-rebuild']` — **persistido no JSON canônico**. Aplicado em import.
+- `availableInMCP: true` — habilita gestão via n8n MCP (`archive_workflow`, `get_workflow_details` etc).
 - Sem trigger externo (webhook/cron) — sem necessidade de `settings.workflows_enabled.IGOR_04` check; invocação só vem de outros workflows IGOR_*.
 - LLM: zero. Workflow é determinístico puro (matriz, set, HTTP, postgres).
 
@@ -148,15 +149,14 @@ Saída esperada:
 1. **Rate limit Chatwoot**: GET + 3x POST/PUT pode triggar throttling em alta concorrência. Mitigação via Redis lock em IGOR_01 (single-callable serial por phone).
 2. **Race em labels concorrentes**: se dois callers invocarem IGOR_04 quase simultaneamente na mesma conversation, o segundo GET pode não ver o POST do primeiro → labels do primeiro são perdidas. Mitigação parcial: IGOR_01 mantém lock por phone, então só um pipeline roda por vez por conversa. Mitigação total exige fila ou advisory lock no Postgres — deferido até evidência de race em produção.
 3. **`POST /labels` substitui lista completa**: a API Chatwoot define labels totais por conversa, não permite "add diff". Por isso o pattern GET-merge-POST é obrigatório. Se um agente humano adicionar uma label manualmente entre GET e POST, ela será perdida. Aceitável dado o lock por phone.
-4. **HTTP credential wiring manual**: as 4 chamadas HTTP precisam ter `igor_chatwoot_api` configurada no UI antes do workflow funcionar. Sem isso o workflow falha em runtime com 401. Documentado em `## Credentials configuradas`.
-5. **`errorWorkflow` não persistido pelo MCP**: o create_workflow_from_code não persistiu `settings.errorWorkflow`. Setar manualmente no UI até MCP suportar — ou via PATCH direto em API REST n8n.
-6. **`tags` não persistidas pelo MCP**: setar manualmente no UI.
+4. **HTTP credential wiring manual**: as 4 chamadas HTTP declaram `igor_chatwoot_api` (httpHeaderAuth) **by name** no JSON, mas sem `id`. A credencial precisa existir no n8n com este nome exato; resolução é feita pelo n8n no momento da execução. Se ausente → 401 em runtime. Documentado em `## Credentials configuradas`.
+5. **SDK source-of-truth gap**: o arquivo `.sdk.ts` não declara `settings`/`tags`/`active` (o SDK API do MCP `create_workflow_from_code` não aceita esses campos no input). Os valores estão no JSON canônico e foram preservados na criação. Se re-rodar `create_workflow_from_code` a partir do SDK, **perderá** errorWorkflow, tags e active — re-aplicar via PATCH REST API ou re-importar JSON direto. Documentado no header do `.sdk.ts`.
+6. **IGOR_07_Error_Logger ID hardcoded**: `settings.errorWorkflow = "ZrsbaSTlW5bqMEaS"` está no JSON. Se IGOR_07 for reimportado (ID muda), todos os errorWorkflow refs ficam stale. Plano Fase C deve incluir fixup script. (Risco compartilhado com `IGOR_AUX_*` e `IGOR_TEST_*` — não introduzido por este commit.)
 
 ## Pendências de wiring (antes da Fase C)
-1. Editar workflow no UI n8n e setar `Settings → Error Workflow → IGOR_07_Error_Logger`.
-2. Adicionar `tags: igor, inbound, tool, fase-b-rebuild` no UI.
-3. Configurar `igor_chatwoot_api` (httpHeaderAuth) nos 4 nodes HTTP (GET Current Labels, POST Merged Labels, POST Conversation Attrs, PUT Contact Attrs).
-4. Setar variáveis de ambiente `CHATWOOT_BASE_URL` e `CHATWOOT_ACCOUNT_ID` no n8n (já devem estar via container env).
+1. **(Single must-do antes de testar)**: Verificar que credencial `igor_chatwoot_api` existe no n8n com httpHeaderAuth wiring para Chatwoot (`api_access_token` header). Sem isso, os 4 HTTP nodes falham 401.
+2. Confirmar que `CHATWOOT_BASE_URL` e `CHATWOOT_ACCOUNT_ID` estão setados como env vars no container n8n (consumido via `$env.X` nas URLs).
+3. (Opcional) Validar no UI que `Settings → Error Workflow` aponta para o IGOR_07 atual (caso IGOR_07 tenha sido reimportado com ID diferente do persistido `ZrsbaSTlW5bqMEaS`).
 
 ## Como testar (Fase C — deferido)
 1. Importar fixtures de `fixtures/IGOR_04_*.json`.

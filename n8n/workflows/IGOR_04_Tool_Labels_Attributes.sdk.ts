@@ -1,3 +1,29 @@
+// =============================================================================
+// SOURCE OF TRUTH NOTICE
+// =============================================================================
+// The CANONICAL workflow representation is the sibling JSON file:
+//   `IGOR_04_Tool_Labels_Attributes.json`
+//
+// This .sdk.ts file was used to generate the initial JSON via the n8n MCP
+// `create_workflow_from_code` tool. After creation, the following workflow-
+// level properties are set ONLY in the JSON (the SDK API surface accepted by
+// `create_workflow_from_code` did not allow declaring them):
+//   - "active": false
+//   - "settings.errorWorkflow": "ZrsbaSTlW5bqMEaS"  (IGOR_07_Error_Logger)
+//   - "settings.executionOrder": "v1"
+//   - "settings.availableInMCP": true
+//   - "tags": ["igor", "inbound", "tool", "fase-b-rebuild"]
+//
+// IF you regenerate the workflow from this SDK source (re-running
+// `create_workflow_from_code`), the four properties above WILL BE LOST.
+// You must re-apply them by either:
+//   (a) PATCHing the resulting workflow via n8n REST API after create, or
+//   (b) Importing the canonical JSON file directly (preferred).
+//
+// Do NOT treat this SDK file as the single source of truth without
+// re-applying the JSON-only properties above.
+// =============================================================================
+
 import {
   workflow,
   node,
