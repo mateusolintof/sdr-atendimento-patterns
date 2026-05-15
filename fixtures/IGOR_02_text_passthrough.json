@@ -1,0 +1,11 @@
+{
+  "phone": "5511999990008",
+  "msgId": "IGOR_02_FIXTURE_text_passthrough",
+  "messageType": "text",
+  "media_url": "",
+  "media_base64": "",
+  "caption": "ola, gostaria de saber sobre o tratamento",
+  "mimeType": "",
+  "chatwoot_conversation_id": "9000008",
+  "test_run_id": "IGOR_02_FIXTURE_text_passthrough"
+}

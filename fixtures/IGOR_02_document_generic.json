@@ -1,0 +1,12 @@
+{
+  "phone": "5511999990007",
+  "msgId": "IGOR_02_FIXTURE_document_generic",
+  "messageType": "document",
+  "media_url": "",
+  "media_base64": "JVBERi0xLjQKJcOkw7zDtsOgCjEgMCBvYmoKPDw=",
+  "caption": "agenda_2026.pdf",
+  "mimeType": "application/pdf",
+  "chatwoot_conversation_id": "9000007",
+  "test_run_id": "IGOR_02_FIXTURE_document_generic",
+  "_fixture_note": "Filename generico sem termos clinicos. Mesmo se extractFromFile falhar, a heuristica nao dispara, e safety_flags ficam default false."
+}

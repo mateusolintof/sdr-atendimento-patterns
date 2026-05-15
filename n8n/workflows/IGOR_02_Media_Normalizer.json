@@ -1,0 +1,1170 @@
+{
+  "id": "GBmG9WZzW2p8Nn6f",
+  "name": "IGOR_02_Media_Normalizer",
+  "active": false,
+  "isArchived": false,
+  "description": "IGOR_02: media normalizer (audio gpt-4o-transcribe + image gpt-4o-mini vision com prompt PT-BR restritivo + document regex + text passthrough + unknown handoff). Errors -> IGOR_07. Inactive.",
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
+  },
+  "tags": [
+    "igor",
+    "inbound",
+    "media",
+    "fase-b-rebuild"
+  ],
+  "nodes": [
+    {
+      "id": "d8928bd0-72ed-4fc9-9afe-88164750e741",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        768
+      ],
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "phone",
+              "type": "string"
+            },
+            {
+              "name": "msgId",
+              "type": "string"
+            },
+            {
+              "name": "messageType",
+              "type": "string"
+            },
+            {
+              "name": "media_url",
+              "type": "string"
+            },
+            {
+              "name": "media_base64",
+              "type": "string"
+            },
+            {
+              "name": "caption",
+              "type": "string"
+            },
+            {
+              "name": "mimeType",
+              "type": "string"
+            },
+            {
+              "name": "chatwoot_conversation_id",
+              "type": "string"
+            },
+            {
+              "name": "test_run_id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b9dcb374-56d1-4443-b6ea-ce1b60058656",
+      "name": "Validate Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        768
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const strOrEmpty = v => (v === undefined || v === null) ? '' : String(v);\n  const phone = strOrEmpty(j.phone);\n  const msgId = strOrEmpty(j.msgId);\n  const messageType = strOrEmpty(j.messageType).toLowerCase();\n  const mediaUrl = strOrEmpty(j.media_url);\n  const mediaBase64 = strOrEmpty(j.media_base64);\n  const caption = strOrEmpty(j.caption);\n  const mimeType = strOrEmpty(j.mimeType);\n  const convId = strOrEmpty(j.chatwoot_conversation_id);\n  const testRunId = strOrEmpty(j.test_run_id);\n  if (!msgId) throw new Error('IGOR_02: msgId is required');\n  if (!messageType) throw new Error('IGOR_02: messageType is required');\n  let branch;\n  if (messageType === 'audio') branch = 'audio';\n  else if (messageType === 'image') branch = caption.trim().length > 0 ? 'image_with_caption' : 'image_no_caption';\n  else if (messageType === 'document') branch = 'document';\n  else if (messageType === 'text') branch = 'text';\n  else branch = 'unknown';\n  return { json: { phone, msgId, messageType, media_url: mediaUrl, media_base64: mediaBase64, caption, mimeType, chatwoot_conversation_id: convId, test_run_id: testRunId, _branch: branch, _has_media_url: mediaUrl.length > 0, _has_media_base64: mediaBase64.length > 0 } };\n});"
+      }
+    },
+    {
+      "id": "d2c9830c-8d0f-4740-8a3b-6014055cf3f4",
+      "name": "Route By Branch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        704
+      ],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "r0",
+                    "leftValue": "={{ $json._branch }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "audio"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json._branch }}",
+                    "rightValue": "image_with_caption",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "image_with_caption"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "r2",
+                    "leftValue": "={{ $json._branch }}",
+                    "rightValue": "image_no_caption",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "image_no_caption"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ $json._branch }}",
+                    "rightValue": "document",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "document"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "r4",
+                    "leftValue": "={{ $json._branch }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "r5",
+                    "leftValue": "={{ $json._branch }}",
+                    "rightValue": "unknown",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "unknown"
+            }
+          ]
+        },
+        "options": {
+          "allMatchingOutputs": false
+        }
+      }
+    },
+    {
+      "id": "05583a50-f825-400a-ba60-bcee374af524",
+      "name": "Audio Has URL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "audio-has-url-cond",
+              "leftValue": "={{ $json._has_media_url }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "46316fcf-e955-4934-a8c9-2e5416631be9",
+      "name": "Audio Fetch URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.media_url }}",
+        "authentication": "none",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "953818ca-b4e7-4115-bf67-47dc8bbb251c",
+      "name": "Audio Merge Binary",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1120,
+        96
+      ],
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      }
+    },
+    {
+      "id": "8924653b-0b7f-47e9-887b-2188aef3dfb9",
+      "name": "Audio Decode Base64",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        192
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const b64 = String(j.media_base64 || '');\n  const mime = String(j.mimeType || 'audio/ogg');\n  let ext = 'ogg';\n  if (mime.includes('mp3') || mime.includes('mpeg')) ext = 'mp3';\n  else if (mime.includes('wav')) ext = 'wav';\n  else if (mime.includes('m4a') || mime.includes('mp4')) ext = 'm4a';\n  else if (mime.includes('webm')) ext = 'webm';\n  const buffer = Buffer.from(b64, 'base64');\n  return {\n    json: { ...j, _audio_decoded: true, _audio_bytes: buffer.length },\n    binary: {\n      data: {\n        data: b64,\n        fileName: 'audio.' + ext,\n        mimeType: mime,\n        fileExtension: ext\n      }\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "30474dc4-e905-4ba1-ba1f-9994dab07f5b",
+      "name": "Image w/ Caption Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        368
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const caption = String(j.caption || '').trim();\n  const normalizedText = caption;\n  const mediaSummary = '[imagem com caption] ' + caption.slice(0, 200);\n  const safetyFlags = { clinical: false, sensitive_image: false, payment_proof: false, financial: false };\n  return {\n    json: {\n      phone: j.phone,\n      msgId: j.msgId,\n      messageType: j.messageType,\n      chatwoot_conversation_id: j.chatwoot_conversation_id,\n      test_run_id: j.test_run_id,\n      _branch: 'image_with_caption',\n      normalized_text: normalizedText,\n      media_summary: mediaSummary,\n      safety_flags: safetyFlags,\n      safety_flags_json: JSON.stringify(safetyFlags),\n      should_handoff: false,\n      handoff_reason: null\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "caab2746-69c3-49f0-b2ca-3546960d39e7",
+      "name": "Image Has URL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        608
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "image-has-url-cond",
+              "leftValue": "={{ $json._has_media_url }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "00477e49-9941-463b-868b-84ad805a9760",
+      "name": "Image Fetch URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        896,
+        528
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.media_url }}",
+        "authentication": "none",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "02a92ce6-48dc-43b7-b4d4-5e14832ddcb1",
+      "name": "Image Encode DataURL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        608
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const validated = $('Validate Payload').first().json;\nconst items = $input.all();\nreturn items.map(item => {\n  let base64;\n  let mimeType;\n  const bin = item.binary && item.binary.data;\n  if (bin && bin.data) {\n    base64 = String(bin.data);\n    mimeType = String(bin.mimeType || validated.mimeType || 'image/png');\n  } else if (validated.media_base64) {\n    base64 = String(validated.media_base64);\n    mimeType = String(validated.mimeType || 'image/png');\n  } else {\n    throw new Error('IGOR_02 image_no_caption: no binary and no media_base64 to encode');\n  }\n  const dataUrl = 'data:' + mimeType + ';base64,' + base64;\n  return { json: { image_data_url: dataUrl, image_mime_type: mimeType } };\n});"
+      }
+    },
+    {
+      "id": "e6a8f0de-75f2-4132-8ee8-3cd73055b6cd",
+      "name": "Document Has URL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        912
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "document-has-url-cond",
+              "leftValue": "={{ $json._has_media_url }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "dd1206df-c758-4568-8049-c07b12c66e0d",
+      "name": "Document Fetch URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        896,
+        816
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.media_url }}",
+        "authentication": "none",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "cb70d0e3-9aa5-4201-a221-9d113f6ff3df",
+      "name": "Document Merge Binary",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1120,
+        912
+      ],
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      }
+    },
+    {
+      "id": "75eb3c89-076a-4cb0-aa1c-b030e7729dde",
+      "name": "Document Decode Base64",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        1008
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const b64 = String(j.media_base64 || '');\n  const mime = String(j.mimeType || 'application/pdf');\n  const fileName = String(j.caption || 'document.pdf').split(' ')[0];\n  return {\n    json: { ...j, _doc_decoded: true },\n    binary: { data: { data: b64, fileName: fileName.endsWith('.pdf') ? fileName : (fileName + '.pdf'), mimeType: mime } }\n  };\n});"
+      }
+    },
+    {
+      "id": "b8f447ca-b870-41de-8f5a-8ac971a5c2a2",
+      "name": "Text Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        1184
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const caption = String(j.caption || '');\n  const safetyFlags = { clinical: false, sensitive_image: false, payment_proof: false, financial: false };\n  return {\n    json: {\n      phone: j.phone,\n      msgId: j.msgId,\n      messageType: j.messageType,\n      chatwoot_conversation_id: j.chatwoot_conversation_id,\n      test_run_id: j.test_run_id,\n      _branch: 'text',\n      normalized_text: caption,\n      media_summary: '[texto]',\n      safety_flags: safetyFlags,\n      safety_flags_json: JSON.stringify(safetyFlags),\n      should_handoff: false,\n      handoff_reason: null\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "6ce8a3b8-85f0-44e6-8218-1e1b7e96dd8b",
+      "name": "Merge Branches",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1792,
+        704
+      ],
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 6
+      }
+    },
+    {
+      "id": "b933edc0-a457-4698-8997-f08d77c88f09",
+      "name": "Unknown Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        1376
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const mt = String(j.messageType || '');\n  const normalizedText = '[midia desconhecida tipo=' + mt + ']';\n  const safetyFlags = { clinical: false, sensitive_image: false, payment_proof: false, financial: false };\n  return {\n    json: {\n      phone: j.phone,\n      msgId: j.msgId,\n      messageType: j.messageType,\n      chatwoot_conversation_id: j.chatwoot_conversation_id,\n      test_run_id: j.test_run_id,\n      _branch: 'unknown',\n      normalized_text: normalizedText,\n      media_summary: normalizedText,\n      safety_flags: safetyFlags,\n      safety_flags_json: JSON.stringify(safetyFlags),\n      should_handoff: true,\n      handoff_reason: 'midia_desconhecida'\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "1bc3700e-82bd-461c-9311-ba68370f3918",
+      "name": "Audio Transcribe (gpt-4o-transcribe)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        96
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "={{ $binary.data }}"
+            },
+            {
+              "name": "model",
+              "value": "gpt-4o-transcribe"
+            },
+            {
+              "name": "language",
+              "value": "pt"
+            },
+            {
+              "name": "response_format",
+              "value": "json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "LlVkZBRsy5tm6FjJ",
+          "name": "igor_openai"
+        }
+      }
+    },
+    {
+      "id": "c1b189ae-946c-406f-84e2-08ed42c63fb8",
+      "name": "Audio Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        96
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const validated = $('Validate Payload').first().json;\nconst items = $input.all();\nreturn items.map(item => {\n  const resp = item.json || {};\n  const transcript = String(resp.text || '').trim();\n  const normalizedText = transcript.length > 0 ? transcript : '[audio sem transcricao]';\n  const mediaSummary = '[audio transcrito] ' + transcript.slice(0, 200);\n  const safetyFlags = { clinical: false, sensitive_image: false, payment_proof: false, financial: false };\n  return {\n    json: {\n      phone: validated.phone,\n      msgId: validated.msgId,\n      messageType: validated.messageType,\n      chatwoot_conversation_id: validated.chatwoot_conversation_id,\n      test_run_id: validated.test_run_id,\n      _branch: 'audio',\n      normalized_text: normalizedText,\n      media_summary: mediaSummary,\n      safety_flags: safetyFlags,\n      safety_flags_json: JSON.stringify(safetyFlags),\n      should_handoff: false,\n      handoff_reason: null,\n      audio_transcribed: transcript.length > 0\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "b6137cc3-3fa8-4f73-9d88-6f1ba62c4a91",
+      "name": "Image Vision (gpt-4o-mini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        608
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"gpt-4o-mini\",\n  response_format: { type: \"json_object\" },\n  temperature: 0,\n  max_tokens: 400,\n  messages: [\n    {\n      role: \"user\",\n      content: [\n        { type: \"text\", text: \"Voce descreve imagens enviadas por leads de uma clinica medica. NAO interpreta clinicamente. NAO da orientacao medica. NAO diagnostica.\\nResponda APENAS em JSON com este schema:\\n{\\n  \\\"descricao\\\": \\\"string - breve descricao neutra do que aparece (max 200 chars)\\\",\\n  \\\"tipo\\\": \\\"selfie_rosto | selfie_corpo | documento | exame_imagem | prescricao | comprovante_pagamento | captura_de_tela | outro\\\",\\n  \\\"safety_flags\\\": {\\n    \\\"clinical\\\": \\\"boolean - true se for exame, laudo, imagem medica, prescricao, raio-X, ultrassom, ressonancia, tomografia, etc.\\\",\\n    \\\"sensitive_image\\\": \\\"boolean - true se for nudez, ferida exposta, antes/depois corporal, partes intimas\\\",\\n    \\\"payment_proof\\\": \\\"boolean - true se for comprovante PIX, transferencia ou recibo\\\",\\n    \\\"financial\\\": \\\"boolean - true se for boleto, fatura ou documento financeiro\\\"\\n  }\\n}\" },\n        { type: \"image_url\", image_url: { url: $json.image_data_url } }\n      ]\n    }\n  ]\n}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "LlVkZBRsy5tm6FjJ",
+          "name": "igor_openai"
+        }
+      }
+    },
+    {
+      "id": "5187a3bd-40f6-4ca3-8803-5c8319ab6c3c",
+      "name": "Image Parse Vision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        608
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const validated = $('Validate Payload').first().json;\nconst items = $input.all();\nreturn items.map(item => {\n  const resp = item.json || {};\n  let descricao = '';\n  let tipo = 'outro';\n  let safetyFlags = { clinical: false, sensitive_image: false, payment_proof: false, financial: false };\n  let parsedOk = false;\n  try {\n    const choices = Array.isArray(resp.choices) ? resp.choices : [];\n    const content = choices.length > 0 && choices[0].message ? String(choices[0].message.content || '') : '';\n    if (content) {\n      const parsed = JSON.parse(content);\n      descricao = String(parsed.descricao || '').trim();\n      tipo = String(parsed.tipo || 'outro').trim();\n      const sf = parsed.safety_flags || {};\n      safetyFlags = {\n        clinical: Boolean(sf.clinical),\n        sensitive_image: Boolean(sf.sensitive_image),\n        payment_proof: Boolean(sf.payment_proof),\n        financial: Boolean(sf.financial)\n      };\n      parsedOk = true;\n    }\n  } catch (e) {\n    descricao = '[imagem nao classificada - parse falhou]';\n    safetyFlags = { clinical: false, sensitive_image: false, payment_proof: false, financial: false };\n  }\n  if (!descricao) descricao = '[imagem sem descricao]';\n  let shouldHandoff = false;\n  let handoffReason = null;\n  if (safetyFlags.clinical) { shouldHandoff = true; handoffReason = 'imagem_clinica_sensivel'; }\n  else if (safetyFlags.sensitive_image) { shouldHandoff = true; handoffReason = 'imagem_sensivel'; }\n  return {\n    json: {\n      phone: validated.phone,\n      msgId: validated.msgId,\n      messageType: validated.messageType,\n      chatwoot_conversation_id: validated.chatwoot_conversation_id,\n      test_run_id: validated.test_run_id,\n      _branch: 'image_no_caption',\n      normalized_text: '[imagem] ' + descricao,\n      media_summary: descricao,\n      safety_flags: safetyFlags,\n      safety_flags_json: JSON.stringify(safetyFlags),\n      should_handoff: shouldHandoff,\n      handoff_reason: handoffReason,\n      image_tipo: tipo,\n      _vision_parsed_ok: parsedOk\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "90294b8b-6bbe-49ef-8db2-bb8791d9f9bc",
+      "name": "Document Extract PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        912
+      ],
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {
+          "joinPages": true,
+          "maxPages": 0,
+          "keepSource": "json"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "9b913017-4008-4211-bf16-a911deb854d3",
+      "name": "Document Classify Heuristic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        912
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const validated = $('Validate Payload').first().json;\nconst items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const extractedText = String(j.text || '');\n  const caption = String(validated.caption || '');\n  const filename = caption.length > 0 ? caption : '';\n  const haystack = (caption + ' ' + filename + ' ' + extractedText).toLowerCase();\n  const clinicalRegex = /(exame|laudo|prescri[c\u00e7][\u00e3a]o|receita|crm[\\-\\s]?\\d|diagn[o\u00f3]stico|hemograma|raio[\\s-]?x|ressonancia|tomografia)/i;\n  const isClinical = clinicalRegex.test(haystack);\n  const textLen = extractedText.length;\n  const snippet = extractedText.slice(0, 300);\n  const normalizedText = '[documento] ' + (filename || 'arquivo.pdf') + ' (' + textLen + ' chars)';\n  const mediaSummary = snippet.length > 0 ? snippet : ('[documento ' + (filename || 'arquivo.pdf') + ']');\n  const safetyFlags = { clinical: isClinical, sensitive_image: false, payment_proof: false, financial: false };\n  return {\n    json: {\n      phone: validated.phone,\n      msgId: validated.msgId,\n      messageType: validated.messageType,\n      chatwoot_conversation_id: validated.chatwoot_conversation_id,\n      test_run_id: validated.test_run_id,\n      _branch: 'document',\n      normalized_text: normalizedText,\n      media_summary: mediaSummary,\n      safety_flags: safetyFlags,\n      safety_flags_json: JSON.stringify(safetyFlags),\n      should_handoff: isClinical,\n      handoff_reason: isClinical ? 'documento_clinico_sensivel' : null,\n      document_text_length: textLen\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "6f8943dd-bfd5-4c99-b200-80879ba28339",
+      "name": "UPSERT Messages",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2016,
+        768
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.messages (conversation_id, msg_id, text, normalized_text, message_type, direction, role, from_me, media_summary, safety_flags, created_at) SELECT c.id, $1::text, NULL, $2::text, $3::text, 'inbound', 'user', false, $4::text, $5::jsonb, now() FROM public.conversations c WHERE c.chatwoot_conversation_id = NULLIF($6::text, '')::int ON CONFLICT (msg_id) WHERE msg_id IS NOT NULL DO UPDATE SET normalized_text = EXCLUDED.normalized_text, media_summary = EXCLUDED.media_summary, safety_flags = EXCLUDED.safety_flags;",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Merge Branches').first().json; return [m.msgId, m.normalized_text, m.messageType, m.media_summary, m.safety_flags_json, m.chatwoot_conversation_id]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "dfad52ca-3909-429b-82ca-6327da6d8610",
+      "name": "INSERT Event media_normalized",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2240,
+        768
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, phone, chatwoot_conversation_id, workflow_name, payload) VALUES ('media_normalized', $1::text, NULLIF($2::text, '')::int, 'IGOR_02_Media_Normalizer', $3::jsonb);",
+        "options": {
+          "queryReplacement": "={{ (function(){ const m = $('Merge Branches').first().json; return [m.phone, m.chatwoot_conversation_id, JSON.stringify({ test_run_id: m.test_run_id, msgId: m.msgId, messageType: m.messageType, branch: m._branch, safety_flags: m.safety_flags, should_handoff: m.should_handoff, handoff_reason: m.handoff_reason, normalized_text_length: (m.normalized_text || '').length, media_summary_length: (m.media_summary || '').length })]; })() }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "375d3cf8-a9e2-4ce7-bbe3-e30d413f5de3",
+      "name": "Final Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2464,
+        768
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "o1",
+              "name": "normalized_text",
+              "value": "={{ $('Merge Branches').first().json.normalized_text }}",
+              "type": "string"
+            },
+            {
+              "id": "o2",
+              "name": "media_summary",
+              "value": "={{ $('Merge Branches').first().json.media_summary }}",
+              "type": "string"
+            },
+            {
+              "id": "o3",
+              "name": "safety_flags",
+              "value": "={{ $('Merge Branches').first().json.safety_flags }}",
+              "type": "object"
+            },
+            {
+              "id": "o4",
+              "name": "should_handoff",
+              "value": "={{ $('Merge Branches').first().json.should_handoff }}",
+              "type": "boolean"
+            },
+            {
+              "id": "o5",
+              "name": "handoff_reason",
+              "value": "={{ $('Merge Branches').first().json.handoff_reason }}",
+              "type": "string"
+            },
+            {
+              "id": "o6",
+              "name": "msgId",
+              "value": "={{ $('Merge Branches').first().json.msgId }}",
+              "type": "string"
+            },
+            {
+              "id": "o7",
+              "name": "branch",
+              "value": "={{ $('Merge Branches').first().json._branch }}",
+              "type": "string"
+            },
+            {
+              "id": "o8",
+              "name": "test_run_id",
+              "value": "={{ $('Merge Branches').first().json.test_run_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Payload": {
+      "main": [
+        [
+          {
+            "node": "Route By Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route By Branch": {
+      "main": [
+        [
+          {
+            "node": "Audio Has URL?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Image w/ Caption Format",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Image Has URL?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Document Has URL?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Text Format",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unknown Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio Has URL?": {
+      "main": [
+        [
+          {
+            "node": "Audio Fetch URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Audio Decode Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio Fetch URL": {
+      "main": [
+        [
+          {
+            "node": "Audio Merge Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio Merge Binary": {
+      "main": [
+        [
+          {
+            "node": "Audio Transcribe (gpt-4o-transcribe)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio Decode Base64": {
+      "main": [
+        [
+          {
+            "node": "Audio Merge Binary",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Image w/ Caption Format": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Image Has URL?": {
+      "main": [
+        [
+          {
+            "node": "Image Fetch URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Image Encode DataURL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image Fetch URL": {
+      "main": [
+        [
+          {
+            "node": "Image Encode DataURL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image Encode DataURL": {
+      "main": [
+        [
+          {
+            "node": "Image Vision (gpt-4o-mini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Has URL?": {
+      "main": [
+        [
+          {
+            "node": "Document Fetch URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Document Decode Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Fetch URL": {
+      "main": [
+        [
+          {
+            "node": "Document Merge Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Merge Binary": {
+      "main": [
+        [
+          {
+            "node": "Document Extract PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Decode Base64": {
+      "main": [
+        [
+          {
+            "node": "Document Merge Binary",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Text Format": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Merge Branches": {
+      "main": [
+        [
+          {
+            "node": "UPSERT Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unknown Format": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "Audio Transcribe (gpt-4o-transcribe)": {
+      "main": [
+        [
+          {
+            "node": "Audio Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio Format": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image Vision (gpt-4o-mini)": {
+      "main": [
+        [
+          {
+            "node": "Image Parse Vision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image Parse Vision": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Document Extract PDF": {
+      "main": [
+        [
+          {
+            "node": "Document Classify Heuristic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Classify Heuristic": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "UPSERT Messages": {
+      "main": [
+        [
+          {
+            "node": "INSERT Event media_normalized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT Event media_normalized": {
+      "main": [
+        [
+          {
+            "node": "Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "pinData": null,
+  "versionId": "bf9825e9-0a2a-4e74-b714-d34d085f3d86",
+  "triggerCount": 0
+}

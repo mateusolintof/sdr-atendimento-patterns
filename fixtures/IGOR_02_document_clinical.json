@@ -1,0 +1,12 @@
+{
+  "phone": "5511999990006",
+  "msgId": "IGOR_02_FIXTURE_document_clinical",
+  "messageType": "document",
+  "media_url": "",
+  "media_base64": "JVBERi0xLjQKJcOkw7zDtsOgCjEgMCBvYmoKPDw=",
+  "caption": "exame_laudo_hemograma_crm_12345.pdf",
+  "mimeType": "application/pdf",
+  "chatwoot_conversation_id": "9000006",
+  "test_run_id": "IGOR_02_FIXTURE_document_clinical",
+  "_fixture_note": "base64 acima e um header PDF truncado. A heuristica regex precisa casar pelo menos no caption/filename (contem exame, laudo, hemograma, CRM, 12345). Mesmo se extractFromFile falhar (PDF invalido), o filename ja dispara safety_flags.clinical=true e should_handoff=true."
+}

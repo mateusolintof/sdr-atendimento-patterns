@@ -1,0 +1,12 @@
+{
+  "phone": "5511999990005",
+  "msgId": "IGOR_02_FIXTURE_image_clinical_flagged",
+  "messageType": "image",
+  "media_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/240px-PNG_transparency_demonstration_1.png",
+  "media_base64": "",
+  "caption": "olha meu hemograma do exame de sangue, esta normal? laudo do laboratorio",
+  "mimeType": "image/png",
+  "chatwoot_conversation_id": "9000005",
+  "test_run_id": "IGOR_02_FIXTURE_image_clinical_flagged",
+  "_fixture_note": "Caption contem termos clinicos. O branch image_with_caption usa o caption como normalized_text. Em paralelo, este caption tambem casaria a heuristica clinica de documento. O contrato literal trata caption como passthrough (sem deteccao automatica), por isso este fixture tem caption clinica mas safety_flags sao defaults (false). A deteccao de imagem clinica real ocorre no branch image_no_caption (com vision)."
+}
