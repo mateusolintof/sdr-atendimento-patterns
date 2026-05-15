@@ -137,6 +137,22 @@ A LLM não decide sozinha:
 - se pode enviar WhatsApp real
 - se pode alterar produção
 
+## ⚠️ `.env` é apenas referência visual — NÃO use `$env.X` em workflows n8n
+
+**Regra absoluta** (vide memória `feedback_env_file_is_reference_only.md`):
+
+O arquivo `.env` no repositório existe **apenas como referência visual** para o agente saber os nomes canônicos das credenciais e seus valores. **Não é carregado em runtime** nos containers Portainer (n8n, Chatwoot, Evolution). Poderia ser `.env.reference.md`.
+
+**Consequências para construir workflows n8n**:
+
+1. **PROIBIDO `={{ $env.X }}`** em nodes n8n. O container n8n não tem essas variáveis E ainda bloqueia `$env` por padrão (`N8N_BLOCK_ENV_ACCESS_IN_NODE=true`). Em runtime aparece `[ERROR: access to env vars denied]` no parameter — workflow falha.
+2. **Credenciais (API keys, tokens)**: criadas via UI n8n → workflows referenciam por nome (`igor_chatwoot_api`, `igor_evolution_api`, `igor_supabase_postgres`, `igor_openai`, `igor_redis_embedded`). n8n liga automático pela nomenclatura.
+3. **URLs / IDs / instance names / team_ids**: **hardcoded** no node parameter (pattern ASX em produção). Ex: `https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/...`. Para prod/test swap, find/replace no JSON + re-PUT via REST.
+4. **Gates (`IGOR_DRY_RUN`, `ALLOW_REAL_WHATSAPP_SEND`)**: lidos do **`settings` table** no Supabase via Postgres node no início do workflow. Trocar prod/test = UPDATE SQL, sem reimport.
+5. **n8n Variables `$vars.X`**: NÃO funcionam em self-hosted Community (Enterprise-only). Não usar.
+
+**Antes de declarar qualquer workflow pronto**: grep por `$env\.` no JSON e SDK. Hits = bug. A fonte de verdade desta arquitetura é `docs/ARCHITECTURE.md`.
+
 ## Segurança de credenciais e produção
 
 O repositório deve conter:
