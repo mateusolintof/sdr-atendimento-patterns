@@ -1,0 +1,729 @@
+{
+  "id": "cDpDA1QdIH9wHAlN",
+  "name": "IGOR_08_Health_Check",
+  "active": false,
+  "isArchived": false,
+  "description": "IGOR_08: health check schedule */10min. 5 service pings (n8n/Chatwoot/Evolution/OpenAI/Supabase) + 24h counts + race detection + orphan batches → events('health_check'). Inactive.",
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
+  },
+  "tags": [
+    {
+      "id": "PPrCQax3p4URUSyB",
+      "name": "igor"
+    },
+    {
+      "id": "8MAvA3vn5AWx51Rw",
+      "name": "fase-b-rebuild"
+    },
+    {
+      "id": "UK4YZSCCPsPTT54F",
+      "name": "infra"
+    },
+    {
+      "id": "mi3pqUTQp2dKWqZU",
+      "name": "health-check"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "9c340178-cce3-49ea-8798-30ee7514857f",
+      "name": "Every 10 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        384
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/10 * * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "228bae5f-eb61-4104-821a-a5836d04cc17",
+      "name": "Init Snapshot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        384
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const now = new Date();\nconst healthId = (typeof crypto !== 'undefined' && crypto.randomUUID)\n  ? crypto.randomUUID()\n  : 'health-' + now.getTime().toString(36) + '-' + Math.random().toString(36).slice(2, 10);\nreturn [{\n  json: {\n    health_id: healthId,\n    started_at: now.toISOString(),\n    started_at_ms: now.getTime()\n  }\n}];"
+      }
+    },
+    {
+      "id": "c88a8c55-4dde-431d-8fbc-e0cfaafec6f7",
+      "name": "n8n Ping",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.N8N_BASE_URL }}/healthz",
+        "authentication": "none",
+        "options": {
+          "timeout": 5000,
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "5423622a-ab85-4be9-849e-4652864a12dc",
+      "name": "Capture n8n",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const init = $('Init Snapshot').first().json;\nconst items = $input.all();\nconst r = (items[0] && items[0].json) || {};\nconst httpCode = Number(r.statusCode ?? r.status ?? 0);\nconst errorRaw = r.error || r.message || null;\nconst ok = httpCode >= 200 && httpCode < 300;\nreturn [{\n  json: {\n    service: 'n8n',\n    status: ok ? 'ok' : 'fail',\n    http_code: httpCode || null,\n    latency_ms: Date.now() - init.started_at_ms,\n    error: ok ? null : (errorRaw ? String(errorRaw).slice(0, 280) : 'non_2xx_or_no_response')\n  }\n}];"
+      }
+    },
+    {
+      "id": "03810957-9dba-4245-b36d-2e685d109acf",
+      "name": "Merge Services",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        896,
+        336
+      ],
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 5
+      }
+    },
+    {
+      "id": "8625456d-d1ea-4266-9b77-b4d5462368f5",
+      "name": "Chatwoot Ping",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        192
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.CHATWOOT_BASE_URL }}/api/v1/accounts/{{ $env.CHATWOOT_ACCOUNT_ID }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 5000,
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "x8StLhAFnYjQxUFg",
+          "name": "igor_chatwoot_api"
+        }
+      }
+    },
+    {
+      "id": "ee125bd1-b9cb-4736-968f-486ecbf4b1c7",
+      "name": "Capture Chatwoot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        192
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const init = $('Init Snapshot').first().json;\nconst items = $input.all();\nconst r = (items[0] && items[0].json) || {};\nconst httpCode = Number(r.statusCode ?? r.status ?? 0);\nconst errorRaw = r.error || (r.body && r.body.error) || null;\nconst ok = httpCode >= 200 && httpCode < 300;\nreturn [{\n  json: {\n    service: 'chatwoot',\n    status: ok ? 'ok' : 'fail',\n    http_code: httpCode || null,\n    latency_ms: Date.now() - init.started_at_ms,\n    error: ok ? null : (errorRaw ? String(errorRaw).slice(0, 280) : 'non_2xx_or_no_response')\n  }\n}];"
+      }
+    },
+    {
+      "id": "5f9ab4a7-bd06-49c8-b26d-16eda7b5e380",
+      "name": "Evolution Ping",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        384
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.EVOLUTION_BASE_URL }}/instance/connectionState/{{ $env.EVOLUTION_INSTANCE_NAME }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 5000,
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "bf2b56b9-70fd-444b-b5c8-77b08d9519aa",
+      "name": "Capture Evolution",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        384
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const init = $('Init Snapshot').first().json;\nconst items = $input.all();\nconst r = (items[0] && items[0].json) || {};\nconst httpCode = Number(r.statusCode ?? r.status ?? 0);\nconst body = r.body || r;\nconst state = (body && body.instance && body.instance.state)\n  || (body && body.state)\n  || null;\nconst httpOk = httpCode >= 200 && httpCode < 300;\nconst stateOk = state === 'open';\nconst ok = httpOk && stateOk;\nconst errorRaw = r.error || (body && body.error) || null;\nreturn [{\n  json: {\n    service: 'evolution',\n    status: ok ? 'ok' : 'fail',\n    http_code: httpCode || null,\n    latency_ms: Date.now() - init.started_at_ms,\n    evolution_state: state,\n    error: ok\n      ? null\n      : (errorRaw\n          ? String(errorRaw).slice(0, 280)\n          : (!httpOk ? 'non_2xx_or_no_response' : ('state=' + String(state))))\n  }\n}];"
+      }
+    },
+    {
+      "id": "b18be9a7-3c5c-472f-b05b-1a9f5f14cc2c",
+      "name": "OpenAI Ping",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        576
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.openai.com/v1/models",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "responseFormat": "json",
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "LlVkZBRsy5tm6FjJ",
+          "name": "igor_openai"
+        }
+      }
+    },
+    {
+      "id": "fe20085e-bfe1-4342-9e32-9537287dbc47",
+      "name": "Capture OpenAI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        576
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const init = $('Init Snapshot').first().json;\nconst items = $input.all();\nconst r = (items[0] && items[0].json) || {};\nconst httpCode = Number(r.statusCode ?? r.status ?? 0);\nconst body = r.body || r;\nconst errorRaw = r.error || (body && body.error && (body.error.message || body.error)) || null;\nconst ok = httpCode >= 200 && httpCode < 300;\nreturn [{\n  json: {\n    service: 'openai',\n    status: ok ? 'ok' : 'fail',\n    http_code: httpCode || null,\n    latency_ms: Date.now() - init.started_at_ms,\n    error: ok ? null : (errorRaw ? String(errorRaw).slice(0, 280) : 'non_2xx_or_no_response')\n  }\n}];"
+      }
+    },
+    {
+      "id": "71eaf8db-fd3d-4b92-ba20-bacb1b3b8f4d",
+      "name": "Supabase Ping",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        448,
+        768
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT 1 AS supabase_ok",
+        "options": {
+          "connectionTimeout": 5
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "id": "a84ed305-cd9b-4348-811c-0f18572edc1b",
+      "name": "Capture Supabase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        768
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const init = $('Init Snapshot').first().json;\nconst items = $input.all();\nconst r = (items[0] && items[0].json) || {};\nconst ok = Number(r.supabase_ok) === 1;\nconst errorRaw = r.error || r.message || null;\nreturn [{\n  json: {\n    service: 'supabase',\n    status: ok ? 'ok' : 'fail',\n    http_code: null,\n    latency_ms: Date.now() - init.started_at_ms,\n    error: ok ? null : (errorRaw ? String(errorRaw).slice(0, 280) : 'select_1_did_not_return_1')\n  }\n}];"
+      }
+    },
+    {
+      "id": "22419c9e-bdb1-45fb-8045-15c2ee509700",
+      "name": "Counts 24h",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1120,
+        192
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT count(*) FROM public.events     WHERE created_at > now() - interval '24 hours') AS events_24h,\n  (SELECT count(*) FROM public.events     WHERE event_type='infra_error' AND created_at > now() - interval '24 hours') AS infra_errors_24h,\n  (SELECT count(*) FROM public.events     WHERE event_type='opt_out'     AND created_at > now() - interval '24 hours') AS opt_outs_24h,\n  (SELECT count(*) FROM public.messages   WHERE created_at > now() - interval '24 hours') AS messages_24h,\n  (SELECT count(*) FROM public.leads      WHERE created_at > now() - interval '24 hours') AS leads_24h,\n  (SELECT count(*) FROM public.campaign_contacts WHERE updated_at > now() - interval '24 hours') AS campaign_24h",
+        "options": {
+          "connectionTimeout": 10
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "33c2ebee-a2fe-4fa0-ab21-eb0a5a5ea3b5",
+      "name": "Merge Metrics",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1344,
+        368
+      ],
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 3
+      }
+    },
+    {
+      "id": "b0ed53b4-a9b6-40a4-9e29-0372deae5c36",
+      "name": "Race Detection",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1120,
+        384
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT count(*)::int AS race_count\nFROM public.conversations c\nJOIN public.messages m ON m.conversation_id = c.id\nWHERE c.ai_enabled = true\n  AND m.role IN ('agent_human', 'agent')\n  AND m.created_at > now() - interval '10 minutes'",
+        "options": {
+          "connectionTimeout": 10
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "2db15176-61fe-4d86-bb11-f6511cee38f3",
+      "name": "Orphan Batches",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        576
+      ],
+      "parameters": {
+        "operation": "keys",
+        "keyPattern": "igor:batch:*",
+        "getValues": false
+      },
+      "credentials": {
+        "redis": {
+          "id": "ayVMY7Njm6ecLLuc",
+          "name": "igor_redis_embedded"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "6ddb0c8d-8aa3-4c4f-89e5-51ebace0a8bb",
+      "name": "Aggregate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        384
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const init = $('Init Snapshot').first().json;\nfunction safeFirst(nodeName) {\n  try {\n    const all = $(nodeName).all();\n    if (!all || all.length === 0) return null;\n    return all[0].json || null;\n  } catch (e) {\n    return null;\n  }\n}\nconst services = [\n  safeFirst('Capture n8n')       || { service: 'n8n',       status: 'fail', http_code: null, latency_ms: null, error: 'capture_unavailable' },\n  safeFirst('Capture Chatwoot')  || { service: 'chatwoot',  status: 'fail', http_code: null, latency_ms: null, error: 'capture_unavailable' },\n  safeFirst('Capture Evolution') || { service: 'evolution', status: 'fail', http_code: null, latency_ms: null, error: 'capture_unavailable' },\n  safeFirst('Capture OpenAI')    || { service: 'openai',    status: 'fail', http_code: null, latency_ms: null, error: 'capture_unavailable' },\n  safeFirst('Capture Supabase')  || { service: 'supabase',  status: 'fail', http_code: null, latency_ms: null, error: 'capture_unavailable' },\n];\nconst countsRaw = safeFirst('Counts 24h') || {};\nconst counts = {\n  events_24h:       Number(countsRaw.events_24h ?? 0),\n  infra_errors_24h: Number(countsRaw.infra_errors_24h ?? 0),\n  opt_outs_24h:     Number(countsRaw.opt_outs_24h ?? 0),\n  messages_24h:     Number(countsRaw.messages_24h ?? 0),\n  leads_24h:        Number(countsRaw.leads_24h ?? 0),\n  campaign_24h:     Number(countsRaw.campaign_24h ?? 0)\n};\nconst raceRaw = safeFirst('Race Detection') || {};\nconst race_count = Number(raceRaw.race_count ?? 0);\nconst orphanRaw = $('Orphan Batches').all();\nlet orphan_keys = [];\ntry {\n  if (Array.isArray(orphanRaw)) {\n    for (const it of orphanRaw) {\n      const j = it.json || {};\n      if (Array.isArray(j.keys)) { orphan_keys = orphan_keys.concat(j.keys); }\n      else if (typeof j === 'string') { orphan_keys.push(j); }\n      else if (j && typeof j === 'object') {\n        for (const k of Object.keys(j)) {\n          if (k.startsWith('igor:batch:')) orphan_keys.push(k);\n        }\n      }\n    }\n  }\n} catch (e) { orphan_keys = []; }\nconst orphan_batches_count = orphan_keys.length;\nconst threshold_breaches = [];\nif (counts.infra_errors_24h > 50) threshold_breaches.push('infra_errors_24h>50');\nif (counts.opt_outs_24h > 20)     threshold_breaches.push('opt_outs_24h>20');\nfor (const s of services) {\n  if (s.status === 'fail') threshold_breaches.push('service_fail:' + s.service);\n}\nif (race_count > 0)                threshold_breaches.push('race');\nif (orphan_batches_count > 5)      threshold_breaches.push('orphan_batches>5');\nconst failedServices = services.filter(s => s.status === 'fail').length;\nlet overall_status = 'healthy';\nconst hasDegraded = (counts.infra_errors_24h > 50)\n  || (counts.opt_outs_24h > 20)\n  || (failedServices >= 1);\nif (hasDegraded) overall_status = 'degraded';\nconst hasCritical = (failedServices >= 2)\n  || (race_count > 0)\n  || (orphan_batches_count > 5);\nif (hasCritical) overall_status = 'critical';\nconst endedAtMs = Date.now();\nconst payload = {\n  health_id: init.health_id,\n  started_at: init.started_at,\n  ended_at: new Date(endedAtMs).toISOString(),\n  duration_ms: endedAtMs - init.started_at_ms,\n  services: services,\n  counts: counts,\n  race_count: race_count,\n  orphan_batches_count: orphan_batches_count,\n  orphan_keys_sample: orphan_keys.slice(0, 20),\n  threshold_breaches: threshold_breaches,\n  overall_status: overall_status\n};\nreturn [{\n  json: {\n    payload: payload,\n    payload_json: JSON.stringify(payload),\n    overall_status: overall_status\n  }\n}];"
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "3a7c5c50-9c8a-4a1a-9672-bedc2d07f378",
+      "name": "INSERT events health_check",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1792,
+        384
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, workflow_name, payload)\nVALUES ('health_check', 'IGOR_08_Health_Check', $1::jsonb)",
+        "options": {
+          "queryReplacement": "={{ $json.payload_json }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "943c433e-99a0-4ff1-82a8-047ad12d393c",
+      "name": "Is Critical?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2016,
+        384
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-critical-cond",
+              "leftValue": "={{ $('Aggregate').first().json.overall_status }}",
+              "rightValue": "critical",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "2450021f-5a95-49a0-8b58-39ac6063ebdd",
+      "name": "INSERT events health_alert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2240,
+        384
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, workflow_name, payload)\nVALUES ('health_alert', 'IGOR_08_Health_Check', $1::jsonb)",
+        "options": {
+          "queryReplacement": "={{ $('Aggregate').first().json.payload_json }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "Z7DeBop4nK4JlIXO",
+          "name": "igor_supabase_postgres"
+        }
+      },
+      "executeOnce": true
+    }
+  ],
+  "connections": {
+    "Every 10 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Init Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Snapshot": {
+      "main": [
+        [
+          {
+            "node": "n8n Ping",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Chatwoot Ping",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Evolution Ping",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "OpenAI Ping",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Supabase Ping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "n8n Ping": {
+      "main": [
+        [
+          {
+            "node": "Capture n8n",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture n8n": {
+      "main": [
+        [
+          {
+            "node": "Merge Services",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Services": {
+      "main": [
+        [
+          {
+            "node": "Counts 24h",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Race Detection",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Orphan Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot Ping": {
+      "main": [
+        [
+          {
+            "node": "Capture Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture Chatwoot": {
+      "main": [
+        [
+          {
+            "node": "Merge Services",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Evolution Ping": {
+      "main": [
+        [
+          {
+            "node": "Capture Evolution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture Evolution": {
+      "main": [
+        [
+          {
+            "node": "Merge Services",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "OpenAI Ping": {
+      "main": [
+        [
+          {
+            "node": "Capture OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Merge Services",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Supabase Ping": {
+      "main": [
+        [
+          {
+            "node": "Capture Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture Supabase": {
+      "main": [
+        [
+          {
+            "node": "Merge Services",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Counts 24h": {
+      "main": [
+        [
+          {
+            "node": "Merge Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Metrics": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Race Detection": {
+      "main": [
+        [
+          {
+            "node": "Merge Metrics",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Orphan Batches": {
+      "main": [
+        [
+          {
+            "node": "Merge Metrics",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "INSERT events health_check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT events health_check": {
+      "main": [
+        [
+          {
+            "node": "Is Critical?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Critical?": {
+      "main": [
+        [
+          {
+            "node": "INSERT events health_alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  }
+}
