@@ -1,0 +1,245 @@
+{
+  "name": "IGOR_06_Chatwoot_Message_Logger",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "igor/chatwoot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-chatwoot-node",
+      "name": "Chatwoot Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "igor-chatwoot-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "event-is-message-created",
+              "leftValue": "={{ $json.body.event }}",
+              "rightValue": "message_created",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-event-filter-node",
+      "name": "IF Event Filter",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "",
+        "options": {
+          "responseCode": 204
+        }
+      },
+      "id": "response-noop-node",
+      "name": "Response NoOp",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [440, 160]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $input.item.json.body || {};\nconst messageType = body.message_type;\nconst senderType = (body.sender || {}).type;\nconst phoneRaw = (((body.conversation || {}).meta || {}).sender || {}).phone_number || '';\nreturn {\n  json: {\n    phone: phoneRaw.replace(/\\D/g, ''),\n    chatwoot_conversation_id: (body.conversation || {}).id,\n    chatwoot_inbox_id: (body.conversation || {}).inbox_id,\n    msg_id: String(body.id || ''),\n    content: body.content || '',\n    message_type_evt: messageType,\n    sender_type: senderType,\n    direction: messageType === 'incoming' ? 'inbound' : 'outbound',\n    role: senderType === 'contact' ? 'user' : (senderType === 'agent_bot' ? 'assistant' : (senderType === 'user' ? 'agent' : 'system')),\n    from_me: messageType !== 'incoming',\n    is_human_takeover: messageType === 'outgoing' && senderType === 'user',\n    test_run_id: ((body.content_attributes || {}).test_run_id) || null,\n    created_at: body.created_at\n  }\n};"
+      },
+      "id": "normalize-message-node",
+      "name": "Normalize Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, -160]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH ct AS (\n  INSERT INTO public.contacts (phone, name)\n  VALUES ($1, NULL)\n  ON CONFLICT (phone) DO UPDATE SET updated_at = now()\n  RETURNING id\n),\ncv AS (\n  INSERT INTO public.conversations (contact_id, chatwoot_conversation_id, chatwoot_inbox_id, state)\n  SELECT ct.id, $2::integer, $3::integer, 'new'\n  FROM ct\n  ON CONFLICT (chatwoot_conversation_id) DO UPDATE SET updated_at = now()\n  RETURNING id\n)\nINSERT INTO public.messages (conversation_id, msg_id, text, message_type, direction, role, from_me, safety_flags)\nSELECT cv.id, $4, $5, 'text', $6, $7, $8::boolean, $9::jsonb\nFROM cv\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [$json.phone, $json.chatwoot_conversation_id, $json.chatwoot_inbox_id, $json.msg_id, $json.content, $json.direction, $json.role, $json.from_me, JSON.stringify({ test_run_id: $json.test_run_id })] }}"
+        }
+      },
+      "id": "upsert-insert-message-node",
+      "name": "Upsert Contact + Conversation + Insert Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [660, -160],
+      "credentials": {
+        "postgres": {
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-human-takeover",
+              "leftValue": "={{ $('Normalize Message').first().json.is_human_takeover }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-human-takeover-node",
+      "name": "IF Is Human Takeover",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [880, -160]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH upd AS (\n  UPDATE public.conversations\n  SET human_locked = true,\n      ai_enabled = false,\n      last_human_message_at = now(),\n      updated_at = now()\n  WHERE chatwoot_conversation_id = $1::integer\n  RETURNING id\n)\nINSERT INTO public.events (event_type, workflow_name, payload, chatwoot_conversation_id)\nSELECT 'human_assumed', 'IGOR_06_Chatwoot_Message_Logger', $2::jsonb, $1::integer\nFROM upd\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [$('Normalize Message').first().json.chatwoot_conversation_id, JSON.stringify({ chatwoot_conversation_id: $('Normalize Message').first().json.chatwoot_conversation_id, test_run_id: $('Normalize Message').first().json.test_run_id })] }}"
+        }
+      },
+      "id": "update-log-human-assumed-node",
+      "name": "Update + Log Human Assumed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1100, -260],
+      "credentials": {
+        "postgres": {
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "response-success-node",
+      "name": "Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1320, -160]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chatwoot Webhook": {
+      "main": [
+        [
+          {
+            "node": "IF Event Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Event Filter": {
+      "main": [
+        [
+          {
+            "node": "Normalize Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response NoOp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Message": {
+      "main": [
+        [
+          {
+            "node": "Upsert Contact + Conversation + Insert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Contact + Conversation + Insert Message": {
+      "main": [
+        [
+          {
+            "node": "IF Is Human Takeover",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Is Human Takeover": {
+      "main": [
+        [
+          {
+            "node": "Update + Log Human Assumed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update + Log Human Assumed": {
+      "main": [
+        [
+          {
+            "node": "Response Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
+  }
+}
