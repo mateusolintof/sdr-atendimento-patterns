@@ -3,6 +3,28 @@
 **Data**: 2026-05-15
 **Decisão do usuário**: resetar Wave 2/3/4 e refazer todos os workflows simplificados com regra `NO SIMPLIFICATIONS` (vide `~/.claude/projects/.../memory/feedback_nunca_simplificar_e_asx_e_referencia.md`).
 
+## STATUS FINAL — 2026-05-15 (pós Fase B + Fase C reviews)
+
+**✅ Todos os 6 itens RESOLVIDOS.** Fase A executou reset (revert 6 commits + DELETE 6 workflows no n8n). Fase B reconstruiu todos os 7 workflows do Inbound (incluindo IGOR_08 novo). Fase C revisou linha-a-linha contra spec — todas reviews APPROVE, com 1 P0 fix aplicado em IGOR_01 (wire `executeWorkflow → IGOR_03` substituindo placeholder events).
+
+| # | Workflow | n8n ID atual | Status | Commit |
+|---|----------|--------------|--------|--------|
+| 1 | IGOR_01 | `nC6ZhCVNn1fQiKfB` | ✅ RESOLVIDO (12/12 condições + Redis batching + calls reais) | `ce08dcc` + fix `819d1ca` |
+| 2 | IGOR_02 | `GBmG9WZzW2p8Nn6f` | ✅ RESOLVIDO (gpt-4o-transcribe + gpt-4o-mini vision REAIS) | `fb8d68a` + fix `edd9adc` |
+| 3 | IGOR_04 | `AJF7dhGrqJEXMLqz` | ✅ RESOLVIDO (3 branches: labels + attrs conversation + attrs contact) | `8a4fe8f` + fix `32e88ef` |
+| 4 | IGOR_05 | `N31QcdrNVE5AOZdu` | ✅ RESOLVIDO (sequência 1-8 + UPDATE leads + IGOR_04 + send gated REAL) | `4cf2d64` |
+| 5 | IGOR_06 | `xpXRENR7Hoo2W5p3` | ✅ RESOLVIDO (call IGOR_04 com `atendimento_humano` + UPDATE conv) | `dd71bf2` |
+| 6 | IGOR_03 | `iQCVbe1P8dC0vhay` | ✅ RESOLVIDO (happy path + compliance fast-path + reply path estruturado) | `39f5ca6` |
+
+Pendências orthogonais (não dívida — ativação produção):
+- Migration `008_messages_msgid_unique.sql` aplicação manual no Supabase.
+- Credencial `igor_evolution_api` criação manual no n8n.
+- Confirmação de credentials wiring em HTTP nodes (Chatwoot/OpenAI/Postgres já wired pelo MCP onde possível; alguns precisam revisão no UI).
+
+Vide `docs/VALIDATION_REPORT.md` e `docs/RUNBOOK.md` para detalhes operacionais.
+
+---
+
 ## Causa raiz
 
 Em briefs de subagentes (T3b, T3c, T4a, T5, T6a, T6b), eu (agente orquestrador) introduzi linguagem de "simplificação pragmática para v1" / "stub e refator depois" **sem autorização do usuário** e **sem base no plano funcional** (`docs/logica-fluxo-igor-receptivo-fora-expediente.md`, `docs/logica-fluxo-igor-agente-ativo-promocao.md`) nem no `docs/IMPLEMENTATION_PLAN.md`. Resultado: 6 workflows commitados em main com gaps funcionais que quebram a lógica desenhada.
