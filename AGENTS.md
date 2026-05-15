@@ -1,5 +1,7 @@
 # AGENTS.md — Instituto Dr. Igor
 
+> **Single source of truth.** `CLAUDE.md` é um symlink para este arquivo; `CODEX.md` aponta para ele. Qualquer agente (Claude Code, Codex, Cursor) deve ler este documento. Edições feitas via atalho `#` em sessões Claude caem aqui.
+
 ## Missão
 
 Você é o agente de engenharia responsável por implementar, validar e documentar o novo sistema de automação do Instituto Dr. Igor.
@@ -14,6 +16,35 @@ O projeto usa:
 - APIs dos serviços para criação, auditoria, teste e validação
 
 Não use Docker Compose como caminho de implementação. Os serviços reais já existem no Portainer e no Supabase Cloud. A implementação deve acontecer por workflows n8n, migrations SQL, scripts, fixtures, documentação e chamadas controladas às APIs.
+
+## Quick start (comandos)
+
+Todos os scripts são read-only por padrão. Mutações exigem flags em `.env`.
+
+```bash
+bash scripts/validate-env.sh                # valida presença das vars canônicas (sem imprimir valores)
+bash scripts/discover.sh --dry-run          # descoberta read-only dos serviços; saída mascarada em scripts/reports/
+bash scripts/discover.sh                    # mesmo, executando GETs reais (ainda read-only)
+bash scripts/seed-chatwoot.sh               # cria/garante labels, custom_attrs e team_bot no Chatwoot
+bash scripts/import-workflow.sh <file.json> # importa um IGOR_*.json para o n8n (workflow entra inativo)
+bash scripts/test-workflow.sh <id>          # smoke test de um workflow já importado
+bash scripts/test-block.sh                  # roda a bateria de fixtures contra workflows ativos
+bash scripts/mask-secrets.sh <file>         # mascara segredos em qualquer arquivo de log/relatório
+python scripts/import-kommo-csv.py          # importa leads do Kommo (lista-leads/*.csv) → Supabase
+```
+
+Para operações em n8n prefira o MCP server `n8n-mcp` (configurado em `.mcp.json`) — use `search_workflows`, `get_workflow_details`, `validate_workflow`, `create_workflow_from_code`, `update_workflow`. Para Supabase use as migrations versionadas em `supabase/migrations/`, aplicadas manualmente no Studio quando a execução direta estiver bloqueada.
+
+## Estado atual da implementação
+
+Antes de propor mudanças, consulte os documentos vivos:
+
+- `docs/IMPLEMENTATION_PLAN.md` — plano operacional consolidado (workflows, migrations, fixtures, testes).
+- `docs/VALIDATION_REPORT.md` — o que está implementado, IDs no n8n, falhas e pendências.
+- `docs/RUNBOOK.md` — smoke runbook e procedimentos operacionais.
+- `docs/WORKFLOW_PLAN.md` — sequência de waves e dependências dos workflows.
+- `reports/api-discovery.md` — inventário read-only mais recente dos serviços.
+- `docs/superpowers/debt/` — registro de débitos técnicos pendentes (simplificações a reverter, etc.).
 
 ## Fonte de verdade
 
@@ -51,21 +82,32 @@ Use essas referências apenas para entender padrões técnicos de stack:
 
 ## Nomes canônicos dos workflows
 
-Use exatamente estes nomes:
+Use exatamente estes nomes. Marcadores indicam o status atual no repositório (verifique `docs/VALIDATION_REPORT.md` para o status no n8n).
 
-- `IGOR_01_Inbound_AfterHours`
-- `IGOR_02_Media_Normalizer`
-- `IGOR_03_Agent_AfterHours`
-- `IGOR_04_Tool_Labels_Attributes`
-- `IGOR_05_Finalize_Handoff`
-- `IGOR_06_Chatwoot_Message_Logger`
-- `IGOR_07_Error_Logger`
-- `IGOR_08_Health_Check`
-- `IGOR_09_Campaign_Importer`
-- `IGOR_10_Campaign_Dispatcher`
-- `IGOR_11_Campaign_Message_Generator`
-- `IGOR_12_Campaign_Inbound_Handler`
-- `IGOR_13_Agent_Campaign`
+**Receptivo fora de expediente — implementados (`n8n/workflows/IGOR_0*.json` + `*.sdk.ts`):**
+
+- `IGOR_01_Inbound_AfterHours` ✅
+- `IGOR_02_Media_Normalizer` ✅
+- `IGOR_03_Agent_AfterHours` ✅
+- `IGOR_04_Tool_Labels_Attributes` ✅
+- `IGOR_05_Finalize_Handoff` ✅
+- `IGOR_06_Chatwoot_Message_Logger` ✅
+- `IGOR_07_Error_Logger` ✅
+- `IGOR_08_Health_Check` ✅
+
+**Campanha ativa — pendentes (fase 2):**
+
+- `IGOR_09_Campaign_Importer` ⏳
+- `IGOR_10_Campaign_Dispatcher` ⏳
+- `IGOR_11_Campaign_Message_Generator` ⏳
+- `IGOR_12_Campaign_Inbound_Handler` ⏳
+- `IGOR_13_Agent_Campaign` ⏳
+
+**Helpers internos (não canônicos, prefixo `IGOR_AUX_`/`IGOR_TEST_`):**
+
+- `IGOR_AUX_save_lead_partial` — subworkflow callable para persistência parcial de leads.
+- `IGOR_AUX_update_conversation_state` — subworkflow callable para atualizar estado da conversa.
+- `IGOR_TEST_Failing_Workflow`, `IGOR_TEST_Trampoline` — fixtures para validar error logger e callable pattern. Nunca ativar em produção.
 
 Use underscore em nomes técnicos. Não misture hífen e underscore.
 
@@ -136,36 +178,39 @@ Mutações em serviços reais só podem acontecer quando `ALLOW_PRODUCTION_MUTAT
 ```text
 .
 ├── README.md
-├── AGENTS.md
-├── CLAUDE.md
-├── CODEX.md
-├── .env.example
+├── AGENTS.md                # fonte de verdade para agentes
+├── CLAUDE.md                # symlink → AGENTS.md
+├── CODEX.md                 # pointer doc → AGENTS.md
+├── .env / .env.example      # .env real fica fora do Git
 ├── .gitignore
+├── .mcp.json                # config do n8n-mcp (sem segredos hardcoded; usar ${N8N_MCP_TOKEN})
 ├── docs/
 │   ├── logica-fluxo-igor-receptivo-fora-expediente.md
 │   ├── logica-fluxo-igor-agente-ativo-promocao.md
 │   ├── IMPLEMENTATION_PLAN.md
+│   ├── WORKFLOW_PLAN.md
 │   ├── RUNBOOK.md
 │   ├── VALIDATION_REPORT.md
 │   ├── ENVIRONMENT.md
-│   └── referencias/
-│       └── workflows-asx/
+│   ├── referencias/workflows-asx/   # referência técnica — não copiar regras comerciais
+│   ├── superpowers/                 # plans, debt registry, contracts
+│   └── workflows/                   # specs por workflow
 ├── n8n/
-│   ├── workflows/
-│   ├── exports/
-│   └── backups/
-├── supabase/
-│   └── migrations/
-├── chatwoot/
-│   └── scripts/
-├── evolution/
-│   └── scripts/
-├── fixtures/
-├── scripts/
-└── reports/
+│   ├── workflows/                   # IGOR_*.json + *.sdk.ts (single-file workflow SDK)
+│   ├── exports/                     # exports gerados via API
+│   └── backups/                     # snapshots antes de overwrite
+├── supabase/migrations/             # SQL idempotente, aplicado no Supabase Studio
+├── chatwoot/scripts/                # auxiliares de seeding
+├── evolution/scripts/               # auxiliares de webhook
+├── fixtures/                        # payloads de teste (texto, áudio, imagem, opt-out, campanha)
+├── scripts/                         # validate-env, discover, import/export, smoke tests
+├── tests/                           # suites contra fixtures
+├── lista-leads/                     # CSVs do Kommo (input para import-kommo-csv.py)
+├── reports/                         # saídas read-only (api-discovery.md, env-validation.md)
+└── archives/                        # históricos imutáveis
 ```
 
-A pasta `n8n/workflows/` deve conter apenas workflows novos do Igor.
+A pasta `n8n/workflows/` deve conter apenas workflows novos do Igor. Workflows ASX, quando existirem na instância, são intocáveis.
 
 ## Fases de implementação
 
@@ -207,7 +252,7 @@ Criar migrations SQL idempotentes em:
 supabase/migrations/
 ```
 
-Arquivos esperados:
+Arquivos existentes (aplicados em ordem; idempotentes):
 
 ```text
 001_core_schema.sql
@@ -215,7 +260,12 @@ Arquivos esperados:
 003_settings_seed.sql
 004_campaign_schema.sql
 005_rls_policies.sql
+006_campaign_seed_2026-05.sql      # seed dos contatos da campanha vigente
+007_asserts_rpc.sql                # RPCs de validação usadas pelos workflows
+008_messages_msgid_unique.sql      # constraint de unicidade para dedup de mensagens
 ```
+
+Para novas migrations, mantenha numeração sequencial e idempotência (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`).
 
 As migrations devem criar ou ajustar:
 
@@ -435,12 +485,12 @@ Não faça:
 
 ## Primeira ação obrigatória
 
-Comece lendo os documentos, validando o repositório e criando ou atualizando:
+Antes de qualquer mutação:
 
-1. `docs/IMPLEMENTATION_PLAN.md`
-2. `reports/api-discovery.md`
-3. `.env.example`
-4. `.gitignore`
-5. estrutura de pastas
+1. Ler `docs/logica-fluxo-igor-receptivo-fora-expediente.md` e `docs/logica-fluxo-igor-agente-ativo-promocao.md`.
+2. Verificar estado atual em `docs/VALIDATION_REPORT.md` e `docs/IMPLEMENTATION_PLAN.md` — não duplicar trabalho já feito.
+3. Rodar `bash scripts/validate-env.sh` para confirmar presença das variáveis em `.env`.
+4. Rodar `bash scripts/discover.sh --dry-run` (ou sem flag) para inventariar serviços de forma read-only — saída mascarada em `scripts/reports/`.
+5. Listar informações faltantes (ver seção "Informações que você deve solicitar se faltarem") e apresentar o plano antes de tocar produção.
 
-Depois apresente o plano e a lista de informações faltantes antes de executar mutações reais nos serviços.
+Mutações em serviços reais só após `ALLOW_PRODUCTION_MUTATIONS=true` em `.env` **e** aprovação explícita do usuário para a fase em execução.
