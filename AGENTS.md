@@ -42,7 +42,12 @@ Use essas referências apenas para entender padrões técnicos de stack:
 - health check
 - integração Chatwoot/Evolution/n8n/Supabase
 
-Não copie regras comerciais, prompts, nomes, IDs, tabelas específicas, credenciais, mensagens reais, telefones reais ou problemas conhecidos da ASX.
+**Para mais informações e conhecimento dos serviços e integrações, use o context7 para buscar a documentação referente às versões dos serviços implementados**
+
+- Para integração Evolution API + Chatwoot, veja documentação no link: https://doc.evolution-api.com/v2/pt/integrations/chatwoot
+- Para conhecimento do N8N, invoque as skills /n8n-expression-syntax e /n8n-workflow-patterns e /n8n-mcp-tools-expert, /n8n-validation-expert, /n8n-node-configuration  e use também a documentacao oficial caso as skills nao deem tudo que voce precisa de conhecimento.
+    - Veja documentação oficial: https://docs.n8n.io/" 
+
 
 ## Nomes canônicos dos workflows
 
