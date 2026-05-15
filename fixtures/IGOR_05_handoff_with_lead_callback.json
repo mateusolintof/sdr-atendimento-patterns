@@ -1,0 +1,10 @@
+{
+  "chatwoot_conversation_id": "9001",
+  "chatwoot_contact_id": "8001",
+  "lead_id": "00000000-0000-0000-0000-000000000005",
+  "handoff_reason": "after_hours_callback",
+  "summary": "Lead chamado Maria, objetivo emagrecimento, prefere ser contactada amanhã pela manhã. Coleta realizada pelo agente Igor durante after-hours.",
+  "callback_period": "amanhã de manhã",
+  "owner_flow": "after_hours",
+  "test_run_id": "IGOR_05_FIXTURE_with_lead_callback"
+}

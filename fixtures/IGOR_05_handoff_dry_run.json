@@ -1,0 +1,10 @@
+{
+  "chatwoot_conversation_id": "9004",
+  "chatwoot_contact_id": "8004",
+  "lead_id": "00000000-0000-0000-0000-000000000009",
+  "handoff_reason": "after_hours_callback",
+  "summary": "Fixture especifica para validar que send gate cai em dry_run quando IGOR_DRY_RUN=true ou ALLOW_REAL_WHATSAPP_SEND!=true. Resultado esperado: events('dry_run_send'); nenhuma chamada Evolution real.",
+  "callback_period": "tarde",
+  "owner_flow": "after_hours",
+  "test_run_id": "IGOR_05_FIXTURE_dry_run"
+}
