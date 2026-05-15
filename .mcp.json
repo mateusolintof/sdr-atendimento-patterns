@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "n8n-mcp": {
+      "type": "http",
+      "url": "https://n8n.almaconvert.com.br/mcp-server/http",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhODdjNTZkYy1iNDg2LTRhZTgtOGQ0Mi0zNDkwZTdkMzYxMGQiLCJpc3MiOiJuOG4iLCJhdWQiOiJtY3Atc2VydmVyLWFwaSIsImp0aSI6IjY0NzcwZGY5LTc3NzAtNGE4OC1hODRlLWQwZWU2YTQ4OWQ5NiIsImlhdCI6MTc3ODgwNTU0Nn0.k-6v6V6CoDrk7K4Aan8puKwjK4dfdPeHgJpNoEYB1E4"
+      }
+    }
+  }
+}
