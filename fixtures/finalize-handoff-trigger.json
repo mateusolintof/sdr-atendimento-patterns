@@ -1,0 +1,14 @@
+{
+  "phone": "5562900000005",
+  "chatwoot_conversation_id": 8001,
+  "chatwoot_inbox_id": 1,
+  "chatwoot_contact_id": null,
+  "lead_id": null,
+  "handoff_reason": "after_hours_callback",
+  "summary": "Lead Ana coletado fora do expediente. Objetivo: emagrecimento. Callback: tarde.",
+  "callback_period": "tarde",
+  "owner_flow": "after_hours",
+  "nome": "Ana",
+  "test_run_id": "{{TEST_RUN_ID}}",
+  "_skip_chatwoot_calls": true
+}

@@ -1,0 +1,302 @@
+{
+  "name": "IGOR_05_Finalize_Handoff",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {"name": "phone", "type": "string"},
+            {"name": "chatwoot_conversation_id", "type": "number"},
+            {"name": "chatwoot_inbox_id", "type": "number"},
+            {"name": "chatwoot_contact_id", "type": "number"},
+            {"name": "lead_id", "type": "string"},
+            {"name": "handoff_reason", "type": "string"},
+            {"name": "summary", "type": "string"},
+            {"name": "callback_period", "type": "string"},
+            {"name": "owner_flow", "type": "string"},
+            {"name": "nome", "type": "string"},
+            {"name": "test_run_id", "type": "string"},
+            {"name": "_skip_chatwoot_calls", "type": "boolean"}
+          ]
+        }
+      },
+      "id": "execute-trigger-node",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const j = item.json || {};\n  const phone = (j.phone === undefined || j.phone === null || j.phone === '') ? null : String(j.phone);\n  const convIdRaw = j.chatwoot_conversation_id;\n  const convId = (convIdRaw === undefined || convIdRaw === null || convIdRaw === '') ? null : parseInt(convIdRaw, 10);\n  const inboxIdRaw = j.chatwoot_inbox_id;\n  const inboxId = (inboxIdRaw === undefined || inboxIdRaw === null || inboxIdRaw === '') ? 1 : parseInt(inboxIdRaw, 10);\n  const contactIdRaw = j.chatwoot_contact_id;\n  const contactId = (contactIdRaw === undefined || contactIdRaw === null || contactIdRaw === '') ? null : parseInt(contactIdRaw, 10);\n  const leadId = (j.lead_id === undefined || j.lead_id === null || j.lead_id === '') ? null : String(j.lead_id);\n  const handoffReason = (j.handoff_reason === undefined || j.handoff_reason === null || j.handoff_reason === '') ? 'unspecified' : String(j.handoff_reason);\n  const summary = (j.summary === undefined || j.summary === null) ? '' : String(j.summary);\n  const callbackPeriod = (j.callback_period === undefined || j.callback_period === null || j.callback_period === '') ? null : String(j.callback_period);\n  const ownerFlow = (j.owner_flow === undefined || j.owner_flow === null || j.owner_flow === '') ? 'after_hours' : String(j.owner_flow);\n  const nome = (j.nome === undefined || j.nome === null || j.nome === '') ? null : String(j.nome);\n  const testRunId = (j.test_run_id === undefined || j.test_run_id === null) ? null : String(j.test_run_id);\n  const skipChatwoot = j._skip_chatwoot_calls === true;\n  return {\n    json: {\n      phone,\n      chatwoot_conversation_id: convId,\n      chatwoot_inbox_id: inboxId,\n      chatwoot_contact_id: contactId,\n      lead_id: leadId,\n      handoff_reason: handoffReason,\n      summary,\n      callback_period: callbackPeriod,\n      owner_flow: ownerFlow,\n      nome,\n      test_run_id: testRunId,\n      _skip_chatwoot_calls: skipChatwoot\n    }\n  };\n});"
+      },
+      "id": "validate-payload-node",
+      "name": "Validate Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH ct AS (\n  INSERT INTO public.contacts (phone, name)\n  VALUES ($1, $2)\n  ON CONFLICT (phone) DO UPDATE SET\n    name = COALESCE(EXCLUDED.name, public.contacts.name),\n    updated_at = now()\n  RETURNING id\n),\ncv AS (\n  INSERT INTO public.conversations (\n    contact_id, chatwoot_conversation_id, chatwoot_inbox_id,\n    state, ai_enabled, human_locked, assigned_team_id, current_flow\n  )\n  SELECT ct.id, $3::integer, $4::integer,\n    'human_assigned', false, true, 1, $5\n  FROM ct\n  ON CONFLICT (chatwoot_conversation_id) DO UPDATE SET\n    state = 'human_assigned',\n    ai_enabled = false,\n    human_locked = true,\n    assigned_team_id = 1,\n    current_flow = COALESCE($5, public.conversations.current_flow),\n    updated_at = now()\n  RETURNING id, contact_id\n)\nSELECT id AS conversation_id, contact_id FROM cv;",
+        "options": {
+          "queryReplacement": "={{ [$json.phone || '0000000000000', $json.nome, $json.chatwoot_conversation_id, $json.chatwoot_inbox_id, $json.owner_flow] }}"
+        }
+      },
+      "id": "upsert-conversation-node",
+      "name": "Upsert Contact + Conversation (human_assigned)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [440, 0],
+      "credentials": {
+        "postgres": {
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "skip-condition",
+              "leftValue": "={{ $('Validate Payload').first().json._skip_chatwoot_calls }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-skip-node",
+      "name": "IF Skip Chatwoot",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $('Validate Payload').first().json.chatwoot_conversation_id }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: 'Handoff Igor:\\n\\n' + ($('Validate Payload').first().json.summary || ''), message_type: 'outgoing', private: true }) }}",
+        "options": {}
+      },
+      "id": "chatwoot-private-note-node",
+      "name": "Chatwoot POST Private Note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 160],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "igor_chatwoot_api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.almaconvert.com.br/api/v1/accounts/2/conversations/{{ $('Validate Payload').first().json.chatwoot_conversation_id }}/assignments",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ team_id: 1 }) }}",
+        "options": {}
+      },
+      "id": "chatwoot-assignment-node",
+      "name": "Chatwoot POST Assignment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 160],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "igor_chatwoot_api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const v = $('Validate Payload').first().json;\nconst payload = {\n  handoff_reason: v.handoff_reason,\n  owner_flow: v.owner_flow,\n  summary: v.summary,\n  callback_period: v.callback_period,\n  lead_id: v.lead_id,\n  chatwoot_conversation_id: v.chatwoot_conversation_id,\n  nome: v.nome,\n  test_run_id: v.test_run_id\n};\nreturn [{\n  json: {\n    chatwoot_conversation_id: v.chatwoot_conversation_id,\n    handoff_payload_json: JSON.stringify(payload)\n  }\n}];"
+      },
+      "id": "shape-handoff-event-node",
+      "name": "Shape Handoff Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, workflow_name, payload, chatwoot_conversation_id)\nVALUES ('handoff_complete', 'IGOR_05_Finalize_Handoff', $1::jsonb, $2::integer);",
+        "options": {
+          "queryReplacement": "={{ [$json.handoff_payload_json, $json.chatwoot_conversation_id] }}"
+        }
+      },
+      "id": "log-handoff-complete-node",
+      "name": "Log Handoff Complete",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1540, 0],
+      "credentials": {
+        "postgres": {
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const v = $('Validate Payload').first().json;\nconst nome = v.nome || 'Obrigada';\nconst callback = v.callback_period || 'o quanto antes';\nconst text = `${nome}, perfeito. Já anotei tudo aqui e a equipe do Dr. Igor vai te chamar no período que você indicou (${callback}) para seguir o atendimento e ver os próximos passos. Até logo!`;\nconst dryPayload = {\n  phone: v.phone,\n  final_text: text,\n  target: 'evolution_sendText',\n  test_run_id: v.test_run_id\n};\nreturn [{\n  json: {\n    chatwoot_conversation_id: v.chatwoot_conversation_id,\n    final_text: text,\n    dry_payload_json: JSON.stringify(dryPayload),\n    test_run_id: v.test_run_id\n  }\n}];"
+      },
+      "id": "build-final-message-node",
+      "name": "Build Final Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.events (event_type, workflow_name, payload, chatwoot_conversation_id)\nVALUES ('dry_run_send', 'IGOR_05_Finalize_Handoff', $1::jsonb, $2::integer);",
+        "options": {
+          "queryReplacement": "={{ [$json.dry_payload_json, $json.chatwoot_conversation_id] }}"
+        }
+      },
+      "id": "log-dry-run-send-node",
+      "name": "Log Dry Run Send",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1980, 0],
+      "credentials": {
+        "postgres": {
+          "name": "igor_supabase_postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "success-flag",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "test-run-id-out",
+              "name": "test_run_id",
+              "value": "={{ $('Validate Payload').first().json.test_run_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "respond-success-node",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2200, 0]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {"node": "Validate Payload", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Validate Payload": {
+      "main": [
+        [
+          {"node": "Upsert Contact + Conversation (human_assigned)", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Upsert Contact + Conversation (human_assigned)": {
+      "main": [
+        [
+          {"node": "IF Skip Chatwoot", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "IF Skip Chatwoot": {
+      "main": [
+        [
+          {"node": "Shape Handoff Event", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Chatwoot POST Private Note", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Chatwoot POST Private Note": {
+      "main": [
+        [
+          {"node": "Chatwoot POST Assignment", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Chatwoot POST Assignment": {
+      "main": [
+        [
+          {"node": "Shape Handoff Event", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Shape Handoff Event": {
+      "main": [
+        [
+          {"node": "Log Handoff Complete", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Log Handoff Complete": {
+      "main": [
+        [
+          {"node": "Build Final Message", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Build Final Message": {
+      "main": [
+        [
+          {"node": "Log Dry Run Send", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Log Dry Run Send": {
+      "main": [
+        [
+          {"node": "Success Response", "type": "main", "index": 0}
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "ZrsbaSTlW5bqMEaS"
+  }
+}
