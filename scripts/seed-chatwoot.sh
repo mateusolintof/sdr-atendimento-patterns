@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
-# seed-chatwoot.sh — Cria labels, custom_attribute_definitions, team e agent_bot
+# seed-chatwoot.sh — Cria labels, custom_attribute_definitions e os 3 teams
 # do Igor no Chatwoot, de forma idempotente.
 #
-# Não cria inbox aqui: a inbox será criada automaticamente quando rodarmos
-# `POST {EVOLUTION}/chatwoot/set/{instance}` na Fase 5 (Evolution).
+# Teams criados (refatoração Fluxo 1, 2026-05-15):
+#   - "IA Após-Expediente"   ↔ settings.ai_team_id            (owner_flow='ai_active')
+#   - "Atendimento Humano"   ↔ settings.human_daytime_team_id (owner_flow='human_daytime')
+#   - "Aguardando Retorno"   ↔ settings.handoff_queue_team_id (owner_flow IN handoff_queue, ai_unqualified)
+#
+# Não cria inbox: a inbox WhatsApp única é criada via Evolution
+# (POST {EVOLUTION}/chatwoot/set/{instance}).
+# Não cria agent_bot: removido após decisão de manter "Alice" legacy inativo.
+#
+# Após rodar, popular os 3 team_ids nas settings (vide saída do script).
 #
 # Requer: ALLOW_PRODUCTION_MUTATIONS=true em .env.
 #
@@ -82,6 +90,11 @@ create_label "callback_solicitado"      "#FFC107" "Lead solicitou retorno"
 create_label "callback_horario_coletado" "#4CAF50" "Período de retorno coletado"
 create_label "aguardando_atendente"     "#FFC107" "Aguardando atendente humana"
 create_label "atendimento_humano"       "#F44336" "Atendente humana respondeu"
+# receptivo — gate lead novo + caminhos A/B
+create_label "lead_novo"                "#FF9800" "Primeira jornada (IA atendeu)"
+create_label "lead_qualificado"         "#4CAF50" "Caminho A: IA coletou nome+objetivo+período"
+create_label "nao_qualificado_ia"       "#9E9E9E" "Caminho B: lead não engajou com IA"
+create_label "aguardando_humano_proximo_expediente" "#FFC107" "Bloqueado por jornada existente ou dentro expediente"
 # campanha
 create_label "promo_eligivel"           "#7C4DFF" "Elegível para campanha promocional"
 create_label "promo_disparo"            "#7C4DFF" "Em fila de disparo"
@@ -145,6 +158,9 @@ create_attr "regular_price"     "Regular Price"     0 0 "Preço regular"
 create_attr "promo_price"       "Promo Price"       0 0 "Preço promocional"
 create_attr "campaign_status"   "Campaign Status"   6 0 "Status do contato na campanha" \
   '["queued","sent","replied","interested","handoff_done","opt_out"]'
+create_attr "handoff_outcome"   "Handoff Outcome"   6 0 "Caminho do handoff Alice" \
+  '["qualified","unqualified","compliance"]'
+create_attr "turn_count"        "Turn Count"        1 0 "Turnos Alice executados nesta conversation"
 
 # contact attributes (model=1)
 create_attr "do_not_contact"    "Do Not Contact"    7 1 "Contato pediu para não receber mais"
@@ -152,60 +168,61 @@ create_attr "consent_marketing" "Consent Marketing" 7 1 "Consentimento explícit
 create_attr "optout_at"         "Optout At"         5 1 "Quando opt-out foi registrado"
 create_attr "external_lead_id"  "External Lead ID"  0 1 "UUID do lead no Supabase"
 
-# ---------- TEAM ----------
-echo "==> Team"
-TEAM_NAME="Atendimento Humano"
-TEAM_ID=$(curl -sS -X GET "${CW}/teams" "${H_TOK[@]}" | \
-  python3 -c "import json,sys; arr=json.load(sys.stdin); want='${TEAM_NAME}'.lower(); print(','.join([str(x['id']) for x in arr if x.get('name','').lower()==want]))")
-if [[ -n "$TEAM_ID" ]]; then
-  echo "  skip  $TEAM_NAME (id=$TEAM_ID)"
-else
-  RESP=$(curl -sS -X POST "${CW}/teams" "${H_TOK[@]}" "${H_JSON[@]}" \
-    -d "{\"name\":\"${TEAM_NAME}\",\"description\":\"Atendentes humanos do Instituto Dr. Igor\",\"allow_auto_assign\":true}")
-  TEAM_ID=$(echo "$RESP" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
-  echo "  ok    $TEAM_NAME (id=$TEAM_ID)"
-fi
+# ---------- TEAMS ----------
+# Refatoração Fluxo 1 (2026-05-15): 3 teams para mapear owner_flow.
+# Nome UI Chatwoot ↔ chave técnica em settings:
+#   "IA Após-Expediente"  ↔ ai_team_id            (owner_flow='ai_active')
+#   "Atendimento Humano"  ↔ human_daytime_team_id (owner_flow='human_daytime')
+#   "Aguardando Retorno"  ↔ handoff_queue_team_id (owner_flow IN handoff_queue, ai_unqualified)
+echo "==> Teams"
 
-# ---------- AGENT BOT ----------
-echo "==> Agent bot"
-BOT_NAME="Alice — IA Instituto Dr. Igor"
-BOT_LIST=$(curl -sS -X GET "${CW}/agent_bots" "${H_TOK[@]}" 2>/dev/null || echo "[]")
-BOT_ID=$(echo "$BOT_LIST" | python3 -c "import json,sys
-try:
-  arr = json.load(sys.stdin)
-  if isinstance(arr, dict): arr = arr.get('payload', [])
-  print(','.join([str(x['id']) for x in arr if x.get('name')=='${BOT_NAME}']))
-except: print('')")
-
-if [[ -n "$BOT_ID" ]]; then
-  echo "  skip  $BOT_NAME (id=$BOT_ID)"
-else
-  RESP=$(curl -sS -X POST "${CW}/agent_bots" "${H_TOK[@]}" "${H_JSON[@]}" \
-    -d "{\"name\":\"${BOT_NAME}\",\"description\":\"Agente IA do Instituto Dr. Igor (n8n)\",\"outgoing_url\":\"\"}")
-  BOT_ID=$(echo "$RESP" | python3 -c "import json,sys
-try: print(json.load(sys.stdin).get('id',''))
-except: print('')")
-  if [[ -n "$BOT_ID" ]]; then
-    echo "  ok    $BOT_NAME (id=$BOT_ID)"
+create_team() {
+  local name="$1" description="$2" varname="$3"
+  local id
+  id=$(curl -sS -X GET "${CW}/teams" "${H_TOK[@]}" | \
+    python3 -c "import json,sys; arr=json.load(sys.stdin); want='${name}'.lower(); print(','.join([str(x['id']) for x in arr if x.get('name','').lower()==want]))")
+  if [[ -n "$id" ]]; then
+    echo "  skip  $name (id=$id)"
   else
-    echo "  FAIL  $BOT_NAME — resp: $RESP"
-    echo "        agent_bot pode requerer platform API (super admin). Veremos no resumo."
+    local resp
+    resp=$(curl -sS -X POST "${CW}/teams" "${H_TOK[@]}" "${H_JSON[@]}" \
+      -d "{\"name\":\"${name}\",\"description\":\"${description}\",\"allow_auto_assign\":true}")
+    id=$(echo "$resp" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
+    if [[ -n "$id" ]]; then
+      echo "  ok    $name (id=$id)"
+    else
+      echo "  FAIL  $name  resp=$resp"
+    fi
   fi
-fi
+  eval "$varname=\${id:-}"
+}
+
+create_team "IA Após-Expediente" "Conversas sob comando da IA (Alice) fora do expediente" AI_TEAM_ID
+create_team "Atendimento Humano" "Atendimento humano em horário comercial ou jornada existente" HUMAN_DAYTIME_TEAM_ID
+create_team "Aguardando Retorno" "Leads para retorno humano (qualificados ou não engajados)" HANDOFF_QUEUE_TEAM_ID
+
+# Nota: agent_bot "Alice" criado em versões anteriores fica inativo no Chatwoot.
+# Não recriamos aqui — usar a UI do Chatwoot se quiser remover.
 
 # ---------- STATE FILE ----------
-TEAM_ID_JSON=${TEAM_ID:-null}
-BOT_ID_JSON=${BOT_ID:-null}
-[[ "$TEAM_ID_JSON" != "null" ]] && TEAM_ID_JSON="$TEAM_ID_JSON" || TEAM_ID_JSON="null"
-[[ "$BOT_ID_JSON" != "null" ]] && BOT_ID_JSON="$BOT_ID_JSON" || BOT_ID_JSON="null"
+AI_TEAM_ID_JSON=${AI_TEAM_ID:-null}
+HUMAN_DAYTIME_TEAM_ID_JSON=${HUMAN_DAYTIME_TEAM_ID:-null}
+HANDOFF_QUEUE_TEAM_ID_JSON=${HANDOFF_QUEUE_TEAM_ID:-null}
+[[ -z "$AI_TEAM_ID_JSON" ]] && AI_TEAM_ID_JSON="null"
+[[ -z "$HUMAN_DAYTIME_TEAM_ID_JSON" ]] && HUMAN_DAYTIME_TEAM_ID_JSON="null"
+[[ -z "$HANDOFF_QUEUE_TEAM_ID_JSON" ]] && HANDOFF_QUEUE_TEAM_ID_JSON="null"
 
 cat >> "$STATE_FILE" <<EOF
-  "team_atendimento_humano_id": ${TEAM_ID_JSON},
-  "agent_bot_alice_id": ${BOT_ID_JSON},
-  "note": "inbox será criado via Evolution na Fase 5"
+  "ai_team_id": ${AI_TEAM_ID_JSON},
+  "human_daytime_team_id": ${HUMAN_DAYTIME_TEAM_ID_JSON},
+  "handoff_queue_team_id": ${HANDOFF_QUEUE_TEAM_ID_JSON},
+  "note": "inbox WhatsApp criada via Evolution; agent_bot Alice mantido inativo (legado)"
 }
 EOF
 
 echo
 echo "==> Estado salvo em $STATE_FILE"
-echo "    Atualize .env: CHATWOOT_HUMAN_TEAM_ID=${TEAM_ID_JSON}"
+echo "    Aplique manualmente em supabase/migrations/013 ou via Studio:"
+echo "      UPDATE settings SET value='${AI_TEAM_ID_JSON}'::jsonb WHERE key='ai_team_id';"
+echo "      UPDATE settings SET value='${HUMAN_DAYTIME_TEAM_ID_JSON}'::jsonb WHERE key='human_daytime_team_id';"
+echo "      UPDATE settings SET value='${HANDOFF_QUEUE_TEAM_ID_JSON}'::jsonb WHERE key='handoff_queue_team_id';"

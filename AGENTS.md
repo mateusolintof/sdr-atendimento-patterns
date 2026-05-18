@@ -19,31 +19,6 @@ O projeto usa:
 
 Não use Docker Compose como caminho de implementação. Os serviços já existem no Portainer e no Supabase Cloud. A implementação acontece por workflows n8n, migrations SQL, scripts e chamadas controladas às APIs.
 
-## Quick start (comandos)
-
-```bash
-bash scripts/discover.sh --dry-run          # descoberta read-only dos serviços
-bash scripts/discover.sh                    # mesmo, executando GETs reais
-bash scripts/seed-chatwoot.sh               # cria/garante labels, custom_attrs, team_bot no Chatwoot
-bash scripts/import-workflow.sh <file.json> # importa um IGOR_*.json para o n8n (workflow entra inativo)
-bash scripts/test-workflow.sh <id>          # smoke test de um workflow já importado
-bash scripts/mask-secrets.sh <file>         # mascara segredos em qualquer arquivo de log/relatório
-python scripts/import-kommo-csv.py          # importa leads do Kommo (lista-leads/*.csv) → Supabase
-```
-
-Para operações em n8n prefira o MCP server `n8n-mcp` — use `search_workflows`, `get_workflow_details`, `validate_workflow`, `create_workflow_from_code`, `update_workflow`, `publish_workflow`, `unpublish_workflow`. Para Supabase use as migrations versionadas em `supabase/migrations/`, aplicadas manualmente no Studio.
-
-## Estado atual da implementação
-
-Consulte sempre antes de propor mudanças:
-
-- `docs/ARCHITECTURE.md` — fonte de verdade arquitetural (topologia, IDs n8n, fluxos node-by-node, dívida).
-- `docs/IMPLEMENTATION_PLAN.md` — contratos por workflow IGOR_*.
-- `docs/VALIDATION_REPORT.md` — status real (workflows, migrations, integrações, dívida).
-- `docs/RUNBOOK.md` — procedimentos operacionais.
-- `docs/logica-fluxo-igor-receptivo-fora-expediente.md` — spec funcional do inbound.
-- `docs/logica-fluxo-igor-agente-ativo-promocao.md` — spec funcional do disparo.
-
 ## Credenciais
 
 **Credenciais reais vivem em `.claude/CREDENCIAIS.md`** (gitignored). O agente consulta esse arquivo para saber URLs, tokens e instâncias. Nenhuma aplicação carrega o conteúdo dele — é referência visual.
@@ -60,13 +35,6 @@ Consulte sempre antes de propor mudanças:
 
 ## Fonte de verdade funcional
 
-A lógica funcional do projeto está exclusivamente em:
-
-1. `docs/logica-fluxo-igor-receptivo-fora-expediente.md`
-2. `docs/logica-fluxo-igor-agente-ativo-promocao.md`
-
-Em caso de conflito entre código e esses documentos, o documento prevalece (exceto para nomes canônicos dos workflows, fixados aqui).
-
 Referências técnicas da ASX ficam em `docs/referencias/workflows-asx/` — use apenas para entender padrões de stack (webhook Evolution, Redis batching, callables, agent tools, handoff, labels, Chatwoot integration). **Não copie regras comerciais, prompts, IDs, telefones ou problemas conhecidos da ASX.**
 
 **Para conhecimento técnico atualizado**:
@@ -76,47 +44,39 @@ Referências técnicas da ASX ficam em `docs/referencias/workflows-asx/` — use
 
 ## Nomes canônicos dos workflows
 
-**Receptivo fora de expediente — implementados (`n8n/workflows/IGOR_0*.json` + `*.sdk.ts`):**
+**Receptivo fora de expediente — implementados (`n8n/workflows/IGOR_*.sdk.ts`):**
 
-- `IGOR_01_Inbound_AfterHours` ✅
-- `IGOR_02_Media_Normalizer` ✅
-- `IGOR_03_Agent_AfterHours` ✅
-- `IGOR_04_Tool_Labels_Attributes` ✅
-- `IGOR_05_Finalize_Handoff` ✅
-- `IGOR_06_Chatwoot_Message_Logger` ✅
-- `IGOR_07_Error_Logger` ✅
-- `IGOR_08_Health_Check` ✅
+Topologia atual (pós refator 2026-05-18, adaptação ASX 07-FB-Leads-Inbound):
 
-**Campanha ativa — pendentes (Frente Campanha):**
+- `IGOR_Inbound` ✅ — workflow principal único (webhook Evolution → gates → mídia switch → Redis batch → Alice agent → Send WhatsApp). Consolida o que antes era IGOR_01+IGOR_02+IGOR_03+IGOR_AUX_*.
+- `IGOR_Handoff` ✅ — callable chamado por Alice (tool `request_handoff`). Ramifica por outcome (qualified/unqualified/compliance), atribui team, aplica labels via IGOR_04, posta private note. ID `mfB7MGpCYSPQvRSx` (reutiliza workflow que antes era IGOR_05_v2).
+- `IGOR_04_Tool_Labels_Attributes` ✅ — callable de labels/custom_attributes/private_note, usado por IGOR_Inbound e IGOR_Handoff.
+- `IGOR_Chatwoot_Logger` ✅ — webhook Chatwoot, detecta resposta humana e flipa `owner_flow='human_daytime'` (renomeado de IGOR_06).
+- `IGOR_07_Error_Logger` ✅ — errorWorkflow target de todos os IGOR_*.
+- `IGOR_08_Health_Check` ✅ — healthcheck externo.
 
-- `IGOR_09_Campaign_Importer` — script Python local (já existe em `scripts/import-kommo-csv.py`)
-- `IGOR_10_Campaign_Dispatcher` ⏳
-- `IGOR_11_Campaign_Message_Generator` — **deferido**, consolidado inline no IGOR_10 via Edit Fields (decisão 2026-05-15)
-- `IGOR_12_Campaign_Inbound_Handler` ⏳
-- `IGOR_13_Agent_Campaign` ⏳
+**Arquivados pós-refator** (não usar/recriar): `IGOR_01_Inbound_AfterHours`, `IGOR_01_Inbound_AfterHours_v2`, `IGOR_02_Media_Normalizer`, `IGOR_03_Agent_AfterHours`, `IGOR_05_Finalize_Handoff`, `IGOR_AUX_save_lead_partial`, `IGOR_AUX_update_conversation_state`.
+
+**Campanha ativa — implementado (one-shot, sem AI):**
+
+- `IGOR_09_Campaign_Importer` — script Python local (`scripts/import-kommo-csv.py`).
+- `IGOR_Campaign_Sender` ✅ — workflow único de disparo (cron 7min, batch=2, jitter 45-90s, 3 variantes anti-block, quota progressiva 20→50→100/dia). ID `4NzqtCS3ZGrwSVnB`. Cancela IGOR_10/11/12/13: resposta do lead vai pra atendente humana via gate `block_reason='campaign_active'` já existente em IGOR_Inbound. Após cada send: aguarda 3s, busca contato no Chatwoot, atribui conversa ao team `Promoção Maio 2026` (id=5, settings `promo_team_id`) via API `POST /conversations/{id}/assignments`. Tracking de resposta via UPDATE em IGOR_Inbound (`Update Campaign Replied`); tracking de agendamento via IGOR_Chatwoot_Logger (detecção de label `agendado`).
+
+**Teams Chatwoot (account 2):**
+
+| ID | Nome | Função |
+|---|---|---|
+| 1 | atendimento humano | Leads em jornada existente ou em horário comercial |
+| 3 | ia após-expediente | Conversas sob comando da Alice |
+| 4 | aguardando retorno | Pós-handoff IA aguardando contato humano |
+| 5 | promoção maio 2026 | Conversas da campanha (atribuído pós-send) |
 
 **Helpers internos:**
 
-- `IGOR_AUX_save_lead_partial` — callable usado como tool pelo IGOR_03.
-- `IGOR_AUX_update_conversation_state` — callable usado como tool pelo IGOR_03.
 - `IGOR_TEST_Failing_Workflow`, `IGOR_TEST_Trampoline` — fixtures para validar IGOR_07 (errorTrigger pattern). Nunca ativar em produção.
 - `IGOR_TEST_Smoke_Trigger` — manual trigger que dispara WhatsApp pro número configurado em `settings.smoke_test_phone` (usado em smoke real).
 
 Use underscore em nomes técnicos. Não misture hífen e underscore.
-
-## Princípio arquitetural
-
-**Harness Engineering.** Regras determinísticas em Code/IF/Switch/SQL/Redis-locks/callables. A LLM pode ser usada para:
-
-- resposta conversacional
-- resumo
-- extração semântica
-- classificação estruturada
-- geração de mensagem personalizada
-
-**A LLM não decide sozinha** se deve responder, se está dentro ou fora do expediente, se uma conversa está travada por humano, se existe opt-out, se pode enviar campanha, se pode alterar labels, se pode executar handoff, se pode enviar WhatsApp real, se pode alterar produção.
-
-**Preferência por Edit Fields (Set) sobre Code node** para transformações declarativas (rename, default, projeção, concatenação). Code só com justificativa real (regex, parsing JSON com try/catch, manipulação de arrays, APIs n8n não expostas em Set como `Intl.DateTimeFormat`).
 
 ## ⚠️ PROIBIDO em workflows n8n
 
@@ -129,8 +89,7 @@ Use underscore em nomes técnicos. Não misture hífen e underscore.
 |---------------|-----------|
 | Credentials (API keys, tokens) | UI do n8n → referenciado por nome no node |
 | URLs / IDs / instance names | Hardcoded no node parameter (pattern ASX em produção) |
-| Gates operacionais (`dry_run_send`, `allow_real_whatsapp_send`) | Tabela `settings` no Supabase — `Postgres "Load Gates"` no início do workflow |
-| Configs de negócio (business hours, holidays, workflows_enabled) | Tabela `settings` no Supabase |
+| Configs de negócio (business hours, holidays, workflows_enabled, team_ids) | Tabela `settings` no Supabase |
 
 Para prod/test swap (instância Evolution): find/replace no JSON local + re-PUT via REST ou via `mcp__n8n-mcp__update_workflow`.
 
@@ -139,47 +98,10 @@ Para prod/test swap (instância Evolution): find/replace no JSON local + re-PUT 
 ## Segurança e gates
 
 - `.claude/CREDENCIAIS.md` é gitignored. Nunca commitar segredos.
-- Workflows nascem inativos (`active: false`). Ativação após smoke verde.
 - `errorWorkflow: ZrsbaSTlW5bqMEaS` (IGOR_07) em todos os workflows IGOR_*.
-- Gates seguros default em `settings`:
-  - `dry_run_send=true` → bloqueia Evolution `sendText`.
-  - `allow_real_whatsapp_send=false` → impede envio real.
-  - `ai_enabled_global=true` por padrão; kill switch em `false` pausa Igor inteiro.
+- Kill switches em `settings`:
+  - `ai_enabled_global=true` por padrão; em `false` pausa Igor inteiro.
   - `workflows_enabled.IGOR_XX` controla cada workflow individual.
-
-Envio real de WhatsApp só ocorre quando `settings.allow_real_whatsapp_send=true` AND `settings.dry_run_send=false`, e o número de teste autorizado pelo usuário está confirmado.
-
-## Estrutura do repositório
-
-```text
-.
-├── README.md
-├── AGENTS.md                # fonte de verdade para regras (este arquivo)
-├── CLAUDE.md                # symlink → AGENTS.md
-├── CODEX.md                 # pointer doc → AGENTS.md
-├── .gitignore
-├── .mcp.json                # config do n8n-mcp
-├── .claude/
-│   ├── CREDENCIAIS.md       # credenciais (gitignored)
-│   ├── settings.json
-│   └── settings.local.json
-├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── IMPLEMENTATION_PLAN.md
-│   ├── RUNBOOK.md
-│   ├── VALIDATION_REPORT.md
-│   ├── logica-fluxo-igor-receptivo-fora-expediente.md
-│   ├── logica-fluxo-igor-agente-ativo-promocao.md
-│   ├── referencias/workflows-asx/     # referência técnica
-│   └── workflows/                     # audit doc por workflow IGOR_*
-├── n8n/
-│   └── workflows/                     # IGOR_*.json + *.sdk.ts
-├── supabase/migrations/               # SQL idempotente
-├── scripts/                           # discover, import-workflow, mask-secrets, kommo CSV
-└── lista-leads/                       # CSVs do Kommo (gitignored)
-```
-
-A pasta `n8n/workflows/` contém apenas workflows do Igor. Workflows ASX, quando existirem na instância, são intocáveis.
 
 ## Migrations Supabase aplicadas
 
@@ -198,6 +120,9 @@ Numeração sequencial idempotente em `supabase/migrations/`:
 010_settings_gates.sql               # dry_run_send + allow_real_whatsapp_send
 011_chatwoot_assignee_optional.sql   # chatwoot_human_assignee_id (default null)
 012_smoke_test_phone.sql             # smoke_test_phone + smoke_test_message
+013_settings_teams_and_flow.sql      # ai_team_id, human_daytime_team_id, handoff_queue_team_id, max_alice_turns
+014_conversations_owner_flow.sql     # journey_started_at, owner_flow, turn_count em conversations
+015_campaign_variants_and_tracking.sql # campaign_runs.message_variants + seed das 3 variantes
 ```
 
 Para novas migrations, mantenha numeração sequencial e idempotência (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING/UPDATE`).
@@ -260,7 +185,7 @@ O sistema não interpreta clinicamente exames, laudos, prescrições, imagens do
 - imprimir tokens, API keys, passwords, connection strings completas ou service role keys
 - apagar workflows que não foram criados pelo Igor
 - alterar workflows ASX
-- enviar WhatsApp real sem `settings.allow_real_whatsapp_send=true` AND `settings.dry_run_send=false` AND aprovação do usuário
+- enviar WhatsApp real sem aprovação do usuário
 - ativar campanha real sem autorização
 - configurar webhook real sem autorização
 - atualizar banco interno do Chatwoot diretamente
@@ -270,13 +195,3 @@ O sistema não interpreta clinicamente exames, laudos, prescrições, imagens do
 - permitir IA responder após humano assumir
 - permitir IA responder após opt-out
 - interpretar exames ou documentos clínicos
-
-## Primeira ação obrigatória
-
-Antes de qualquer mutação:
-
-1. Ler `docs/ARCHITECTURE.md` para entender estado atual.
-2. Ler `docs/logica-fluxo-igor-receptivo-fora-expediente.md` e `docs/logica-fluxo-igor-agente-ativo-promocao.md` para a lógica funcional.
-3. Verificar `docs/VALIDATION_REPORT.md` — não duplicar trabalho já feito.
-4. Consultar `.claude/CREDENCIAIS.md` quando precisar de URLs, tokens ou instância.
-5. Apresentar o plano antes de tocar produção. Mutações destrutivas (delete workflow, force-push, drop table) exigem confirmação explícita do usuário.
