@@ -1,6 +1,12 @@
 # Instituto Dr. Igor - Lógica do Fluxo Receptivo Fora de Expediente
 
-> Este documento descreve a lógica proposta para o fluxo receptivo do Instituto Dr. Igor: como mensagens recebidas no WhatsApp fora do horário de expediente são processadas pela Evolution API, registradas no Chatwoot, orquestradas pelo n8n, persistidas no Supabase e conduzidas por um agente de IA até a coleta de um melhor horário/período para retorno humano.
+> ⚠️ **Status de implementação**: as **regras de negócio** (seções 1–8) seguem válidas. **Os nomes de workflow citados nas seções 9+** (`IGOR_01_Inbound_AfterHours`, `IGOR_02_Media_Normalizer`, `IGOR_03_Agent_AfterHours`, `IGOR_05_Finalize_Handoff`, `IGOR_06_*`, `IGOR_AUX_*`) **foram arquivados** no refator 2026-05-18. A topologia atual consolida tudo em `IGOR_Inbound` + `IGOR_Handoff` + `IGOR_Chatwoot_Logger`. Pra detalhes técnicos de implementação atual, leia `docs/ARCHITECTURE.md`. Pra inventário ao vivo, `tasks.md`.
+>
+> **Lição pós-incident 2026-05-18**: o gate "lead novo" via `journey_started_at IS NULL` é insuficiente em isolamento — pacientes existentes sem row em `conversations` foram falsamente identificados como leads novos. Veja seção 8 deste doc + AGENTS.md (defesa em profundidade).
+>
+> ---
+>
+> Este documento descreve a lógica do fluxo receptivo do Instituto Dr. Igor: como mensagens recebidas no WhatsApp fora do horário de expediente são processadas pela Evolution API, registradas no Chatwoot, orquestradas pelo n8n, persistidas no Supabase e conduzidas por um agente de IA até a coleta de um melhor horário/período para retorno humano.
 
 ---
 

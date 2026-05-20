@@ -1,216 +1,222 @@
 # Tasks — Instituto Dr. Igor
 
-> Arquivo de tarefas persistente entre sessões. Atualizado em 2026-05-18.
-> Para regras de trabalho leia `AGENTS.md`. Para arquitetura técnica viva leia `docs/ARCHITECTURE.md`.
+> Arquivo de tarefas persistente entre sessões. Atualizado em 2026-05-20.
+> Para regras de trabalho leia `AGENTS.md`. Para arquitetura técnica viva leia `docs/ARCHITECTURE.md`. Para procedimentos operacionais leia `docs/RUNBOOK.md`.
 
-## Estado geral (2026-05-18)
+## Estado geral (2026-05-20)
 
-- **Fluxo 1 (Inbound After-Hours)**: implantação concluída. Falta SMOKE end-to-end real (bloqueado: precisa deletar/resetar row de `public.conversations` do telefone de smoke).
-- **Fluxo 2 (Campanha Promocional)**: planejado (ver plan file `~/.claude/plans/primeiro-de-tudo-eu-melodic-toast.md`). Não iniciado.
-- **Frente de campanha (IGOR_11/12/13)**: **CANCELADA**. Substituída por `IGOR_Campaign_Sender` único.
+**Sistema PAUSADO** após incident 2026-05-18 (Alice respondeu erroneamente 6 pacientes existentes — ver "Lições do incident" abaixo).
+
+| Frente | Status |
+|---|---|
+| **Fluxo 1 — Receptivo Fora de Expediente** | ⏸️ pausado. Aguardando implementação de defesa em profundidade do gate "lead novo" (3 camadas) antes de reativar |
+| **Fluxo 2 — Campanha Promocional** | ⏸️ pausado. 5 envios completados (1 smoke Mateus + 4 leads reais — Mary, Adriana, Rosa, eliethmachado40). 134 queued restantes. Aguardando ajuste de gates e/ou reativação coordenada com Fluxo 1 |
+
+### Workflows com webhook DESATIVADOS
+
+- `IGOR_Inbound` (6hXJpXn139z6WCYW) — `active=false`
+- `IGOR_Handoff` (mfB7MGpCYSPQvRSx) — `active=false`
+- `IGOR_Chatwoot_Logger` (xpXRENR7Hoo2W5p3) — `active=false`
+- `IGOR_Campaign_Sender` (4NzqtCS3ZGrwSVnB) — `active=false`
+
+### Webhooks Evolution DESABILITADOS
+
+- `dr.igor` (número de produção, +55 75 9 7047-8880) — `enabled=false`
+- `convert-teste` (número de teste, +55 11 5304-4220) — `enabled=false`
+
+### Workflows ainda ATIVOS
+
+- `IGOR_04_Tool_Labels_Attributes` (callable, sem trigger próprio)
+- `IGOR_07_Error_Logger` (errorTrigger)
+- `IGOR_08_Health_Check` (schedule `*/10 * * * *`)
+
+---
+
+## 🚨 Lições do incident 2026-05-18
+
+Alice respondeu mensagens de 6 pacientes existentes:
+- Lucas Mota (conv 88, +55 71 99197-5986)
+- Licia Helena Bahia (conv 117, +55 75 99210-3663)
+- Vinicius Costa Lima (conv 114, +55 71 99999-2599)
+- Camila (conv 93, +55 75 99851-5613)
+- Nanda🍀 (conv 39, +55 75 98312-2702)
+- Dra Ana Cláudia (conv 6, +55 75 98822-1362)
+
+Atendente humana detectou em tempo real ("Tão mandando mensagem p os meus pacientes" — msg 736 às 20:01:58 UTC).
+
+### Causa raiz (5 erros encadeados)
+
+1. **Webhook duplo ativo**: `convert-teste` (teste) habilitado + `dr.igor` (prod) também habilitado. Mensagens reais entraram via dr.igor.
+2. **dr.igor recebe msgs reais**: número de produção com pacientes em atendimento ativo. Cada msg disparou IGOR_Inbound.
+3. **After-hours forçado**: `settings.holidays=["2026-05-18"]` setado pra teste → gate sempre concluía "fora do expediente".
+4. **`journey_started_at IS NULL` retorna true falsamente**: pacientes nunca passaram pelo IGOR_Inbound antes. Row em `conversations` inexistente.
+5. **Sem fallback no Chatwoot history**: IGOR_Inbound não consulta histórico de msgs humanas anteriores na conv Chatwoot.
+
+### Defesa em profundidade pré-reativação (OBRIGATÓRIA)
+
+Antes de reativar IGOR_Inbound em prod, implementar TODAS as 3 camadas:
+
+#### Camada 1 — Backfill conversations (migration 016)
+- [ ] Criar `supabase/migrations/016_backfill_existing_chatwoot_conversations.sql`
+- [ ] Query: pra cada conv existente no Chatwoot, INSERT em `public.conversations` com `owner_flow='human_daytime'`, `human_locked=true`, `journey_started_at=conv.created_at`, `ai_enabled=false`
+- [ ] Aplicar via Supabase Studio
+- [ ] Verificar: `SELECT COUNT(*) FROM conversations WHERE owner_flow='human_daytime'` ≈ número de conversas no Chatwoot
+
+#### Camada 2 — Gate runtime "tem histórico humano"
+- [ ] Adicionar 1 node em `IGOR_Inbound` (após `Load State`): HTTP GET no Chatwoot listando msgs `message_type=outgoing && sender_type=user` anteriores ao msg_id atual
+- [ ] Code node ajusta `Compute Gates`: se contagem > 0 → `block_reason='existing_human_conversation'`
+- [ ] Smoke test com paciente existente fictício (criar conv no Chatwoot, NÃO criar row em Supabase, mandar msg)
+
+#### Camada 3 — Label override
+- [ ] Adicionar em `Compute Gates`: se conv Chatwoot tem label `ai_disabled` OU `atendimento_humano` → `block_reason='label_disabled'`
+- [ ] Pode usar dados já carregados no `Load State` ou query separada
+
+### Regra operacional permanente
+
+**1 webhook Evolution ativo por vez**. Procedimento de comutação em `docs/RUNBOOK.md` seção "Comutar instância Evolution".
+
+### Conter conversas afetadas (já feito durante incident, manter labels permanentes)
+
+- [ ] Aplicar label `ai_disabled` permanente nas 6 conversas afetadas (cv 88, 117, 114, 93, 39, 6)
+- [ ] Confirmar que `owner_flow='human_daytime'` está setado nas rows correspondentes
+
+---
+
+## Pendências Fluxo 1 (pré-reativação Inbound)
+
+### Implementação técnica
+
+- [ ] **Camada 1** — Migration 016 backfill conversations (ver "Defesa em profundidade")
+- [ ] **Camada 2** — Gate runtime Chatwoot history em IGOR_Inbound
+- [ ] **Camada 3** — Label override `ai_disabled`/`atendimento_humano`
+- [ ] Smoke isolado: paciente existente fictício NÃO deve receber resposta da Alice
+- [ ] Smoke isolado: lead realmente novo DEVE receber resposta da Alice
+- [ ] Reativar `IGOR_Inbound` (publish via MCP)
+- [ ] Habilitar webhook em apenas UMA instância Evolution (prod ou teste, não ambas)
+
+### Pendente do estado anterior (válido após defesa em profundidade)
+
+- [ ] Smoke caminho A (qualified): Alice coleta nome+objetivo+período → handoff → conv em team 4 (aguardando retorno) + labels `lead_qualificado`, `handoff_done`
+- [ ] Smoke caminho B (unqualified): simular disengage → handoff → team 4 + labels `nao_qualificado_ia`
+- [ ] Smoke caminho C (compliance): enviar imagem clínica → handoff → team 1 (atendimento humano) + label `compliance_humano`
+- [ ] Smoke human takeover: atendente envia msg no Chatwoot → IGOR_Chatwoot_Logger detecta → flipa `owner_flow='human_daytime'` → próxima msg do lead à noite NÃO aciona Alice (validar patch `Check IA Match` ainda detecta corretamente)
+- [ ] Cleanup pós-smoke: remover datas de teste de `settings.holidays`, restaurar dia útil normal
+
+---
+
+## Pendências Fluxo 2 (campanha promocional)
+
+### Estado atual
+
+- 6 leads em `campaign_contacts.status='sent'`:
+  - Mateus (smoke), Mary, Adriana, Rosa, eliethmachado40, "Nada" (deletada manualmente — não estava em team Promoção)
+- 134 leads em `campaign_contacts.status='queued'`
+- Campanha em `campaign_runs.status='pausado'`
+
+### Pendências
+
+- [ ] Decidir: ativar antes ou junto com Fluxo 1?
+- [ ] Confirmar que `IGOR_Inbound` (mesmo desativado) não vai responder leads de campanha quando reativar — gate `block_reason='campaign_active'` deve cuidar disso, mas validar com smoke
+- [ ] Confirmar profile name no WhatsApp `dr.igor` (atualmente "Instituto Aguiar Neri" — pode ou não estar correto)
+- [ ] Confirmar variantes finais da mensagem (A2/E2/G2 reformuladas — versão mais quente, sem emoji)
+- [ ] Ativar campanha: `UPDATE campaign_runs SET status='ativo'`
+- [ ] Republicar `IGOR_Campaign_Sender`
+- [ ] Cadência inicial: dia 1: max 20 sends, dia 2: 50, dia 3+: 100 (configurar via `campaign_runs.max_daily_sends`)
+- [ ] Monitorar respostas no Chatwoot team 5 ("promoção maio 2026")
+- [ ] Quando lista esgotar OU `ends_at` (2026-06-01) expirar: `UPDATE campaign_runs SET status='finalizado'`
+- [ ] Compor relatório final pro Dr. Igor: enviadas, entregues, responderam, agendaram, opt-out, falharam + taxas
+
+### Relatório final (template SQL)
+
+```sql
+SELECT status, COUNT(*) AS qty,
+       ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 1) AS pct
+FROM public.campaign_contacts
+WHERE campaign_id = '00000000-0000-0000-0000-000000000001'
+GROUP BY status
+ORDER BY qty DESC;
+```
+
+Métricas-chave:
+- **Enviadas**: count(status IN sent,delivered,replied,interested,converted,handoff_*)
+- **Responderam**: count(status IN replied,interested,converted,handoff_*)
+- **Agendaram**: count(status='converted')
+- **Opt-out**: count(status='opt_out')
+- **Taxa resposta**: respondidos / enviados
+- **Taxa conversão**: agendados / enviados
 
 ---
 
 ## Inventário live no n8n (referência rápida)
 
-### Ativos em produção (8 workflows)
+### Ativos sempre (callables/error/health)
 
 | ID | Nome | Função |
 |---|---|---|
-| `6hXJpXn139z6WCYW` | `IGOR_Inbound` | Webhook Evolution → gates → mídia → Redis batch → Alice → send WhatsApp |
-| `mfB7MGpCYSPQvRSx` | `IGOR_Handoff` | Callable de Alice (tool `request_handoff`). Ramifica qualified/unqualified/compliance |
-| `AJF7dhGrqJEXMLqz` | `IGOR_04_Tool_Labels_Attributes` | Callable de labels/custom_attrs/private_note |
-| `xpXRENR7Hoo2W5p3` | `IGOR_Chatwoot_Logger` | Webhook Chatwoot. Detecta resposta humana, flipa `owner_flow='human_daytime'` |
-| `ZrsbaSTlW5bqMEaS` | `IGOR_07_Error_Logger` | errorWorkflow target de todos |
-| `cDpDA1QdIH9wHAlN` | `IGOR_08_Health_Check` | Healthcheck externo |
-| `m6QeFfLQRa94G5PJ` | `IGOR_TEST_Failing_Workflow` | Fixture do IGOR_07 |
-| `enmJo4zpLEvvfuOH` | `IGOR_TEST_Trampoline` | Fixture do IGOR_07 |
+| `AJF7dhGrqJEXMLqz` | `IGOR_04_Tool_Labels_Attributes` | callable labels + custom_attrs |
+| `ZrsbaSTlW5bqMEaS` | `IGOR_07_Error_Logger` | errorTrigger target de todos |
+| `cDpDA1QdIH9wHAlN` | `IGOR_08_Health_Check` | schedule `*/10 * * * *` |
+| `m6QeFfLQRa94G5PJ` | `IGOR_TEST_Failing_Workflow` | fixture do IGOR_07 |
+| `enmJo4zpLEvvfuOH` | `IGOR_TEST_Trampoline` | fixture do IGOR_07 |
 
-### Helper (ativo manualmente)
+### Desativados pós-incident (reativar quando aplicar defesa)
 
 | ID | Nome | Função |
 |---|---|---|
-| `G8pMteuirc2yZgq5` | `IGOR_TEST_Smoke_Trigger` | Manual trigger, dispara WhatsApp pro `settings.smoke_test_phone` |
+| `6hXJpXn139z6WCYW` | `IGOR_Inbound` | webhook principal — gates, mídia, Alice |
+| `mfB7MGpCYSPQvRSx` | `IGOR_Handoff` | callable de Alice |
+| `xpXRENR7Hoo2W5p3` | `IGOR_Chatwoot_Logger` | webhook Chatwoot (detecta humano takeover + agendado) |
+| `4NzqtCS3ZGrwSVnB` | `IGOR_Campaign_Sender` | cron 7min disparo campanha |
+| `G8pMteuirc2yZgq5` | `IGOR_TEST_Smoke_Trigger` | manual trigger (desativado por default) |
 
-### Arquivados (não recriar)
-
-`IGOR_01_Inbound_AfterHours`, `IGOR_01_Inbound_AfterHours_v2`, `IGOR_02_Media_Normalizer`, `IGOR_03_Agent_AfterHours`, `IGOR_05_Finalize_Handoff`, `IGOR_AUX_save_lead_partial`, `IGOR_AUX_update_conversation_state`.
-
----
-
-## Credenciais n8n (referência por ID)
+### Credenciais n8n
 
 | Nome | ID | Tipo |
 |---|---|---|
-| `igor_chatwoot_api` | `x8StLhAFnYjQxUFg` | httpHeaderAuth |
-| `igor_evolution_api` | `DDhbwLsNclqTA18X` | httpHeaderAuth |
-| `igor_supabase_postgres` | (auto-resolvido pelo MCP) | postgres |
-| `igor_openai` | (auto-resolvido pelo MCP) | openAiApi |
-| `igor_redis_embedded` | (auto-resolvido pelo MCP) | redis |
+| `igor_chatwoot_api` | `x8StLhAFnYjQxUFg` | httpHeaderAuth (`api_access_token`) |
+| `igor_evolution_api` | `DDhbwLsNclqTA18X` | httpHeaderAuth (`apikey`) |
+| `igor_supabase_postgres` | `Z7DeBop4nK4JlIXO` | postgres (session pooler) |
+| `igor_openai` | (auto) | openAiApi (Bearer) |
+| `igor_redis_embedded` | `ayVMY7Njm6ecLLuc` | redis (local) |
 
 **HTTP nodes precisam de wiring manual** após `create_workflow_from_code` — MCP só auto-resolve credentials de Postgres/OpenAI/Redis. Workflow para wiring: fetch via REST → PATCH `credentials` → PUT.
 
 ---
 
-## Fluxo 1 — Status detalhado
+## Dependências e referências
 
-### Concluído ✅
-
-- [x] Migration `013_settings_teams_and_flow.sql` aplicada (ai_team_id=3, human_daytime_team_id=1, handoff_queue_team_id=4, max_alice_turns=6)
-- [x] Migration `014_conversations_owner_flow.sql` aplicada (`journey_started_at`, `owner_flow`, `turn_count` adicionados)
-- [x] Seed Chatwoot rodado: 3 teams (`IA Após-Expediente`=3, `Atendimento Humano`=1, `Aguardando Retorno`=4) + labels + custom_attributes
-- [x] `IGOR_Inbound` (53 nodes) deployed em `6hXJpXn139z6WCYW`, 4 HTTP creds wired, errorWorkflow=`ZrsbaSTlW5bqMEaS`, publicado
-- [x] `IGOR_Handoff` (9 nodes) deployed em `mfB7MGpCYSPQvRSx` (reusa ID do antigo IGOR_05_v2), 2 HTTP creds wired, errorWorkflow set, publicado
-- [x] `IGOR_06` renomeado para `IGOR_Chatwoot_Logger` (ID `xpXRENR7Hoo2W5p3`)
-- [x] Webhook Evolution `convert-teste` confirmado apontando para `https://n8n.almaconvert.com.br/webhook/igor/inbound`
-- [x] 7 workflows obsoletos arquivados via MCP
-- [x] AGENTS.md atualizado com nomes canônicos novos
-- [x] `holidays` em `settings` ajustado para `["2026-05-17","2026-05-18"]` (força after-hours hoje)
-
-### Pendente 🔄
-
-- [ ] **Resetar conversation row do smoke** — `conversations` tem row para `contact_id=0c6d9f50-a7e2-45bd-879a-535c369ecfd5` com `owner_flow='human_daytime'`. Bloqueia gate. Usuário precisa deletar manualmente via Supabase Studio:
-  ```sql
-  DELETE FROM public.conversations
-  WHERE contact_id = '0c6d9f50-a7e2-45bd-879a-535c369ecfd5';
-  ```
-- [ ] **Smoke end-to-end (caminho A — qualified)**: enviar WhatsApp pro número da clínica (+551153044220) → Alice responde → coletar nome+objetivo+período → Alice chama `request_handoff(qualified)` → conversa cai em `Aguardando Retorno` (team 4) com labels `lead_qualificado`+`handoff_done`
-- [ ] **Smoke caminho B — unqualified**: simular disengage ou max_turns → outcome `unqualified` → labels `nao_qualificado_ia`
-- [ ] **Smoke caminho C — compliance**: enviar imagem clínica → outcome `compliance` → fila `Atendimento Humano` (team 1) com label `compliance_humano`
-- [ ] **Smoke caminho humano takeover**: atendente envia msg no Chatwoot → IGOR_Chatwoot_Logger detecta → flipa `owner_flow='human_daytime'` → próxima msg do lead à noite NÃO aciona Alice
-- [ ] **Cleanup pós-smoke**: remover `2026-05-18` de `settings.holidays`, restaurar dia útil normal
-
-### Riscos abertos do Fluxo 1
-
-- Status `'sending'` ou `'ai_active'` órfão em `conversations` se workflow crashar mid-flight. Cleanup manual raro.
-- Race entre IGOR_Chatwoot_Logger e Alice no mesmo turno (humano respondeu durante o batch Redis). Mitigação atual: Logger só flipa flag; próximo turno é que respeita.
-
----
-
-## Fluxo 2 — Campanha Promocional (IGOR_Campaign_Sender)
-
-> Plan detalhado em `~/.claude/plans/primeiro-de-tudo-eu-melodic-toast.md`. Resumo abaixo.
-
-### Decisões fixadas
-
-- **1 workflow apenas**: `IGOR_Campaign_Sender` (cron trigger, ~16 nodes)
-- **Sem AI conversacional**: respostas vão direto pra fila humana via `block_reason='campaign_active'` já existente em IGOR_Inbound
-- **Cron**: a cada 7 min com gates internos (janela, holiday, quota, status='active')
-- **Cadência**: batch=2, delay aleatório 45-90s entre sends, max_daily_sends progressivo (20→50→100)
-- **3 variantes de mensagem**: nova coluna `message_variants` jsonb em `campaign_runs`
-- **Personalização**: `{nome}` (primeiro nome de `contacts.name`)
-- **Tracking respostas**: hook em IGOR_Inbound (antes do block) → UPDATE campaign_contacts.status='replied'
-- **Tracking agendamento**: hook em IGOR_Chatwoot_Logger (label `agendado`) → UPDATE campaign_contacts.status='converted'
-- **Idempotência**: SELECT FOR UPDATE SKIP LOCKED + transição imediata para `sending`
-
-### Backlog de implementação
-
-#### Fase A — Banco e seed
-- [x] Criar `supabase/migrations/015_campaign_variants_and_tracking.sql` (ALTER + seed 3 variantes + toggle workflows_enabled)
-- [ ] **Aplicar migration no Supabase Studio** (SQL Editor → cole conteúdo do arquivo → Run)
-- [ ] Adicionar labels no Chatwoot (manual via UI ou rodar `seed-chatwoot.sh`): `promo_maio_2026`, `campanha_enviada`, `respondeu_campanha`, `agendado`
-
-#### Fase B — Workflow novo  ✅
-- [x] `n8n/workflows/IGOR_Campaign_Sender.sdk.ts` criado (19 nodes)
-- [x] Validado via `mcp__n8n-mcp__validate_workflow` (zero erros)
-- [x] Deploy em `4NzqtCS3ZGrwSVnB` (n8n.almaconvert.com.br/workflow/4NzqtCS3ZGrwSVnB)
-- [x] HTTP cred `Send WhatsApp` → `igor_evolution_api` wired
-- [x] errorWorkflow = `ZrsbaSTlW5bqMEaS`
-- [x] Workflow inativo (não publicado) — pronto, mas só dispara quando `campaign_runs.status='ativo'` E publicado
-
-Detalhe da sequência implementada:
-  1. Schedule Trigger `*/7 * * * *`
-  2. Load Campaign State (Postgres CTE: settings + campaign ativa + sent_today)
-  3. Compute Gates (Code: should_proceed, skip_reason, batch_size, remaining_quota)
-  4. IF should_proceed (false → Resp idle 200)
-  5. Pick Eligible Batch (Postgres SELECT FOR UPDATE SKIP LOCKED, LIMIT 2)
-  6. Split In Batches (size=1)
-  7. Mark Sending (UPDATE status='sending')
-  8. Pick Variant + Personalize (Code: random variant + interpolate {nome})
-  9. Send WhatsApp (HTTP Evolution sendText, `neverError: true`)
-  10. IF Send OK → UPDATE 'sent' / 'send_failed'
-  11. INSERT events('campaign_send_attempt')
-  12. Call IGOR_04 Labels (`promo_maio_2026`, `campanha_enviada`)
-  13. Wait jitter (`={{ Math.floor(45000 + Math.random()*45000) }}` ms)
-  14. Next batch
-  15. Final Output (Set: sent_count, failed_count, remaining_quota)
-- [ ] Validar via `mcp__n8n-mcp__validate_workflow` (zero erros)
-- [ ] Deploy via `create_workflow_from_code`, capturar ID
-- [ ] Wire HTTP creds manualmente (Send WhatsApp → `DDhbwLsNclqTA18X`)
-- [ ] Setar `errorWorkflow=ZrsbaSTlW5bqMEaS` via PUT
-- [ ] Não publicar ainda (workflow começa inativo)
-
-#### Fase G — Team `Promoção Maio 2026` + assignment pós-send  ✅
-- [x] Team criado no Chatwoot (id=5, "Promoção Maio 2026")
-- [x] Setting `promo_team_id=5` inserido em settings
-- [x] IGOR_Campaign_Sender patcheado (25 nodes total): após Update Sent → Wait 3s → Search Chatwoot Contact → Extract Contact ID → Get Contact Conversations → Extract Conversation ID → Assign Promo Team → INSERT event sent → Call IGOR_04 Labels (agora com conv_id real)
-- [x] AGENTS.md atualizado com tabela de teams
-
-#### Fase C — Extensões em workflows existentes  ✅
-- [x] **IGOR_Inbound** patcheado via PUT — node `Update Campaign Replied` inserido entre `IF Block Reason?` (true) e `INSERT inbound_blocked`. UPDATE é idempotente (WHERE phone + status IN sent/delivered/sending). Sem chamada extra a IGOR_04 (label `respondeu_campanha` opcional, pode ser feito pelo humano via Chatwoot). 54 nodes total.
-- [x] **IGOR_Chatwoot_Logger** patcheado via PUT — 3 nodes novos:
-  - `IF agendado label added` — IF que checa `body.event='conversation_updated'` AND `changed_attributes` contém `label_list.current` com `agendado` E `previous` sem `agendado`
-  - `UPDATE campaign converted` — UPDATE campaign_contacts SET status='converted', interest_classification='agendado', handoff_at=now via JOIN com contacts.phone
-  - `INSERT campaign_agendamento` — event log
-  - Conexão: IF event=message_created false → IF agendado → (true) UPDATE → INSERT → Filtered Response; (false) INSERT event_filtered. 20 nodes total.
-
-#### Fase D — Docs
-- [x] `AGENTS.md` seção "Campanha ativa": atualizada com `IGOR_Campaign_Sender` único + IDs + migration 015 listada
-- [ ] Revisar `docs/logica-fluxo-igor-agente-ativo-promocao.md` — confirmar regra "AI conversacional na campanha REMOVIDA" (resposta = humano)
-- [ ] Atualizar `docs/ARCHITECTURE.md` com seção dedicada IGOR_Campaign_Sender (deixar pra depois do smoke real)
-
-#### Fase E — Importação Kommo
-- [ ] Confirmar conteúdo de `lista-leads/*.csv` (137 leads esperados)
-- [ ] Dry-run: `python scripts/import-kommo-csv.py` (sem `--apply`) — revisar contagem de skipped vs aceitos
-- [ ] Apply: `python scripts/import-kommo-csv.py --apply`
-- [ ] Verificar: `SELECT COUNT(*) FROM campaign_contacts WHERE campaign_id='00000000-...001' AND status='queued'` ≈ 137
-
-#### Fase F — Smoke campanha (isolado)
-- [ ] Inserir 1 row teste manual em `campaign_contacts` com phone=`5562998621000`, status=`queued`
-- [ ] `UPDATE campaign_runs SET status='active' WHERE id='00000000-...001'`
-- [ ] Publicar `IGOR_Campaign_Sender`
-- [ ] Aguardar ≤7 min ou disparar execução manual
-- [ ] Verificar: msg chegou, `status='sent'`, `sent_at`, `message_variant` populados, label aplicada
-- [ ] Responder: verificar Alice NÃO responde, `status='replied'`, conversa visível no Chatwoot
-- [ ] Aplicar label `agendado` no Chatwoot: verificar `status='converted'`
-- [ ] Cleanup: `UPDATE campaign_runs SET status='pausado'`, despublicar workflow, deletar row de teste
-
-#### Fase G — Disparo real (faseado)
-- [ ] **Dia 1**: `UPDATE campaign_runs SET status='active', max_daily_sends=20`. Publicar workflow. Acompanhar.
-- [ ] **Dia 1 fim**: `SELECT status, COUNT(*) GROUP BY status`. Confirmar sem bloqueio do número.
-- [ ] **Dia 2**: ajustar `max_daily_sends=50`
-- [ ] **Dia 3+**: `max_daily_sends=100`
-- [ ] **Acompanhar respostas** no Chatwoot — atendente humana opera normalmente
-- [ ] **Encerrar quando lista esgotar** OU `ends_at` expirar: `UPDATE campaign_runs SET status='concluida'`, despublicar workflow
-
-#### Fase H — Relatório final
-- [ ] Rodar SQL de métricas (ver plan file seção "Relatório final")
-- [ ] Compor relatório para Dr. Igor: enviadas, entregues, responderam, agendaram, opt-out, falharam + taxas
-
-### Riscos abertos do Fluxo 2
-
-- Bloqueio do número WhatsApp em rajada → mitigado por variantes+jitter+quota progressiva
-- Status `'sending'` órfão se workflow crashar mid-send → cleanup raro com query manual
-- Atendente esquecer label `agendado` → métrica de conversão subnotificada
-- `message_variants` vazio em prod → fallback para `message_template`
-
----
-
-## Dependências externas e conhecimento
-
-- **Plan file Fluxo 2 (detalhado)**: `~/.claude/plans/primeiro-de-tudo-eu-melodic-toast.md`
+- **Regras de trabalho**: `AGENTS.md` (symlink `CLAUDE.md`)
+- **Arquitetura técnica viva**: `docs/ARCHITECTURE.md`
+- **Procedimentos operacionais**: `docs/RUNBOOK.md`
 - **Spec funcional Fluxo 1**: `docs/logica-fluxo-igor-receptivo-fora-expediente.md`
 - **Spec funcional Fluxo 2**: `docs/logica-fluxo-igor-agente-ativo-promocao.md`
-- **Arquitetura técnica viva**: `docs/ARCHITECTURE.md`
-- **Referências ASX**: `docs/referencias/workflows-asx/` (NUNCA copiar regras comerciais; apenas padrões técnicos)
-- **CSVs Kommo**: `lista-leads/*.csv` (gitignored)
-- **Credenciais reais**: `.claude/CREDENCIAIS.md` (gitignored)
-- **Importer**: `scripts/import-kommo-csv.py`
+- **Referências ASX** (padrões técnicos, NÃO regras comerciais): `docs/referencias/workflows-asx/`
+- **Snapshots históricos** (não usar como fonte de verdade): `archives/`
+- **CSVs Kommo** (gitignored): `lista-leads/*.csv`
+- **Credenciais reais** (gitignored): `.claude/CREDENCIAIS.md`
+- **Importer Kommo**: `scripts/import-kommo-csv.py`
 - **Seed Chatwoot**: `scripts/seed-chatwoot.sh`
+- **Memórias de referência** (persistem entre sessões): `~/.claude/projects/-Users-mateusolintof-Projetos-Convert-Produ--o-Instituto-Igor/memory/`
+
+---
 
 ## Backlog futuro (fora de escopo atual)
 
-- [ ] Cleanup cron Postgres para limpar status `sending` órfão (>5min): job manual ou agendado
-- [ ] Dashboard SQL/Metabase para métricas Fluxo 2 em tempo real (para Dr. Igor consultar diretamente)
+- [ ] Cleanup cron Postgres para limpar status `scheduled` órfão (>5min): job manual ou agendado
+- [ ] Dashboard SQL/Metabase para métricas Fluxo 2 em tempo real (Dr. Igor consulta diretamente)
 - [ ] Migration consolidando colunas de handoff (`last_handoff_outcome`, `last_handoff_reason`, `last_handoff_at`) em `conversations` para evitar joins em `events`
 - [ ] Cleanup de IGOR_TEST_Smoke_Trigger se não for mais necessário (após Fluxo 2 entrar em produção)
+- [ ] Reduzir gate de holiday do `IGOR_Campaign_Sender` — feriado pra campanha promo é discutível (decisão de negócio)
+- [ ] Considerar trocar `dr.igor` profile name no WhatsApp pra "Clínica Dr. Igor" ou similar (via Evolution API `/chat/updateProfileName`)
+
+---
+
+## Histórico de mudanças (changelog resumido)
+
+- **2026-05-20**: Audit de drift completo. Apagados workflows SDK/JSON arquivados, tests + docs/workflows obsoletos. Arquivado IMPLEMENTATION_PLAN, REFACTOR_FLUXO_1, VALIDATION_REPORT em `archives/`. Reescrito ARCHITECTURE.md, AGENTS.md, RUNBOOK.md, tasks.md. Criadas memórias de referência permanente.
+- **2026-05-18**: Incident Alice/pacientes. Pausa total. Análise causa raiz: webhook duplo + gate "lead novo" insuficiente. Plano de defesa em profundidade definido.
+- **2026-05-18**: Refator consolidação: IGOR_01+02+03+AUX → IGOR_Inbound, IGOR_05_v2 → IGOR_Handoff, IGOR_06 → IGOR_Chatwoot_Logger, IGOR_09/10/11/12/13 cancelados → IGOR_Campaign_Sender.
+- **2026-05-18**: Implementação Fluxo 2 (Campanha): migration 015, IGOR_Campaign_Sender deployed, team `promoção maio 2026` criado, 5 sends completados.
+- **2026-05-17**: Migrations 013-014 aplicadas (owner_flow, journey_started_at, teams).
+- **2026-05-15**: Fase C — 7 workflows IGOR_01-08 + AUX deployed. ARCHITECTURE.md narrativo escrito.
+- **2026-05-14**: Setup inicial — migrations 001-012, Chatwoot seed, 137 leads Kommo importados.

@@ -1,6 +1,16 @@
 # Instituto Dr. Igor - Lógica do Fluxo do Agente Ativo de Promoção
 
-> Este documento descreve a lógica proposta para o fluxo ativo do Instituto Dr. Igor: como uma lista de leads qualificados anteriormente, mas que nunca agendaram, é importada, segmentada, personalizada e abordada via WhatsApp com uma oportunidade comercial. O fluxo usa Evolution API, Chatwoot, n8n, Supabase, Redis e subworkflows/tools para controle de disparo, resposta, opt-out, labels, custom attributes e handoff humano.
+> ⚠️ **Status de implementação (atualizado 2026-05-20)**: as **regras de negócio** (oferta, elegibilidade, opt-out, segmentação) seguem válidas. Mudanças arquiteturais importantes desde a redação original:
+>
+> 1. **NÃO existe "Alice Promotora" conversacional**. Quando lead responde à campanha, IGOR_Inbound detecta `block_reason='campaign_active'`, NÃO aciona IA. Atendente humana opera a partir daí. Tracking via `campaign_contacts.status = replied → converted` (quando atendente aplicar label `agendado`).
+> 2. **Workflows planejados IGOR_10/IGOR_11/IGOR_12/IGOR_13 foram CANCELADOS**. Substituídos por `IGOR_Campaign_Sender` único (cron `*/7 * * * *` + 3 variantes anti-block + team assignment pós-send).
+> 3. **`IGOR_09_Campaign_Importer` virou script Python local** (`scripts/import-kommo-csv.py`), não workflow n8n.
+>
+> Pra detalhes técnicos de implementação atual leia `docs/ARCHITECTURE.md`. Pra inventário ao vivo, `tasks.md`.
+>
+> ---
+>
+> Este documento descreve a lógica do fluxo ativo do Instituto Dr. Igor: como uma lista de leads qualificados anteriormente, mas que nunca agendaram, é importada, segmentada, personalizada e abordada via WhatsApp com uma oportunidade comercial. O fluxo usa Evolution API, Chatwoot, n8n, Supabase, Redis e subworkflows/tools para controle de disparo, resposta, opt-out, labels, custom attributes e handoff humano.
 
 ---
 
