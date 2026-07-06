@@ -1,0 +1,1053 @@
+<meta charset="utf-8">
+<title>Runbook — Conectar Evolution API ao Chatwoot</title>
+<style>
+  /* ============ RESET ============ */
+  *,*::before,*::after{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0}
+  img,svg{display:block;max-width:100%}
+  h1,h2,h3,h4,p,ul,ol,figure{margin:0}
+  ul,ol{padding:0;list-style:none}
+  a{color:inherit}
+
+  /* ============ TOKENS ============ */
+  :root{
+    --canvas: oklch(0.981 0.004 255);
+    --surface: oklch(1 0 0);
+    --surface-2: oklch(0.965 0.006 255);
+    --ink: oklch(0.25 0.02 262);
+    --ink-2: oklch(0.46 0.02 262);
+    --line: oklch(0.905 0.01 262);
+    --line-2: oklch(0.85 0.012 262);
+    --brand: oklch(0.55 0.13 58);
+    --brand-2: oklch(0.47 0.13 55);
+    --ok: oklch(0.50 0.13 158);
+    --ok-bg: oklch(0.955 0.035 158);
+    --warn: oklch(0.56 0.13 66);
+    --warn-bg: oklch(0.96 0.05 80);
+    --danger: oklch(0.52 0.19 25);
+    --danger-bg: oklch(0.962 0.03 25);
+    --info-bg: oklch(0.96 0.02 255);
+    --shadow: 0 1px 2px oklch(0.25 0.02 262 / .06), 0 8px 24px -12px oklch(0.25 0.02 262 / .18);
+    --shadow-lg: 0 24px 60px -28px oklch(0.25 0.03 262 / .40);
+    --radius: 14px;
+    --maxw: 1080px;
+    --serif: "Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,ui-serif,serif;
+    --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono: ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    /* app mocks — fixed, they portray the real apps */
+    --evo-bg:#0a0f0d; --evo-surf:#0e1512; --evo-surf2:#121b17; --evo-line:#1f2c27;
+    --evo-ink:#e9efec; --evo-mut:#8ba098; --evo-teal:#13b981; --evo-teal-d:#0e9268;
+    --cw-bg:#f6f8fc; --cw-surf:#ffffff; --cw-line:#e6ebf2; --cw-ink:#1f2d3d; --cw-mut:#67748a; --cw-blue:#1f73ff;
+    --chrome:#e9edf2; --chrome-ink:#5b6472;
+  }
+  :root[data-theme="dark"]{
+    --canvas: oklch(0.165 0.012 262);
+    --surface: oklch(0.205 0.014 262);
+    --surface-2: oklch(0.24 0.016 262);
+    --ink: oklch(0.955 0.008 262);
+    --ink-2: oklch(0.74 0.014 262);
+    --line: oklch(0.30 0.018 262);
+    --line-2: oklch(0.37 0.02 262);
+    --brand: oklch(0.80 0.115 72);
+    --brand-2: oklch(0.85 0.10 74);
+    --ok: oklch(0.74 0.13 158);
+    --ok-bg: oklch(0.28 0.05 158);
+    --warn: oklch(0.82 0.12 78);
+    --warn-bg: oklch(0.30 0.06 80);
+    --danger: oklch(0.72 0.16 26);
+    --danger-bg: oklch(0.30 0.08 26);
+    --info-bg: oklch(0.24 0.02 262);
+    --shadow: 0 1px 2px #0006, 0 10px 30px -14px #000a;
+    --shadow-lg: 0 30px 70px -30px #000c;
+    --chrome:#2a3038; --chrome-ink:#aeb7c4;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --canvas: oklch(0.165 0.012 262);
+      --surface: oklch(0.205 0.014 262);
+      --surface-2: oklch(0.24 0.016 262);
+      --ink: oklch(0.955 0.008 262);
+      --ink-2: oklch(0.74 0.014 262);
+      --line: oklch(0.30 0.018 262);
+      --line-2: oklch(0.37 0.02 262);
+      --brand: oklch(0.80 0.115 72);
+      --brand-2: oklch(0.85 0.10 74);
+      --ok: oklch(0.74 0.13 158);
+      --ok-bg: oklch(0.28 0.05 158);
+      --warn: oklch(0.82 0.12 78);
+      --warn-bg: oklch(0.30 0.06 80);
+      --danger: oklch(0.72 0.16 26);
+      --danger-bg: oklch(0.30 0.08 26);
+      --info-bg: oklch(0.24 0.02 262);
+      --shadow: 0 1px 2px #0006, 0 10px 30px -14px #000a;
+      --shadow-lg: 0 30px 70px -30px #000c;
+      --chrome:#2a3038; --chrome-ink:#aeb7c4;
+    }
+  }
+
+  /* ============ BASE ============ */
+  body{
+    background:var(--canvas);color:var(--ink);
+    font-family:var(--sans);font-size:16px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  }
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 clamp(18px,4vw,40px)}
+  p{text-wrap:pretty}
+  strong{font-weight:650}
+  code{font-family:var(--mono);font-size:.86em;background:var(--surface-2);
+    border:1px solid var(--line);border-radius:6px;padding:.08em .38em}
+  .mono{font-family:var(--mono)}
+
+  /* ============ THEME TOGGLE ============ */
+  .theme{position:fixed;top:14px;right:14px;z-index:60;
+    display:inline-flex;gap:6px;align-items:center;
+    background:var(--surface);border:1px solid var(--line);border-radius:999px;
+    padding:5px 12px;font-size:13px;font-weight:600;color:var(--ink-2);
+    box-shadow:var(--shadow);cursor:pointer;font-family:var(--sans)}
+  .theme:hover{color:var(--brand);border-color:var(--brand)}
+
+  /* ============ HERO ============ */
+  .hero{padding:clamp(48px,9vw,96px) 0 clamp(30px,5vw,52px)}
+  .kicker{display:inline-flex;align-items:center;gap:9px;
+    font-size:12.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--brand-2);margin-bottom:22px}
+  .kicker::before{content:"";width:26px;height:2px;background:var(--brand);border-radius:2px}
+  .hero h1{font-family:var(--serif);font-weight:600;
+    font-size:clamp(2.3rem,6vw,4.1rem);line-height:1.02;letter-spacing:-0.025em;
+    text-wrap:balance;margin-bottom:.5em}
+  .hero h1 em{font-style:italic;color:var(--brand-2)}
+  .lede{font-size:clamp(1.05rem,2.4vw,1.32rem);color:var(--ink-2);max-width:60ch;line-height:1.5}
+  .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:30px}
+  .chip{display:inline-flex;align-items:center;gap:7px;
+    background:var(--surface);border:1px solid var(--line);border-radius:999px;
+    padding:7px 14px;font-size:13px;font-weight:600;color:var(--ink-2);box-shadow:var(--shadow)}
+  .chip b{color:var(--ink);font-weight:700}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--brand)}
+
+  /* ============ CALLOUTS ============ */
+  .callout{border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px 20px;background:var(--surface);box-shadow:var(--shadow)}
+  .callout h4{font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;
+    font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .callout p{color:var(--ink-2);font-size:15px}
+  .callout--when{background:var(--info-bg);margin-top:38px}
+  .callout--when h4{color:var(--brand-2)}
+  .c-warn{background:var(--warn-bg);border-color:color-mix(in oklch,var(--warn) 40%,transparent)}
+  .c-warn h4{color:var(--warn)}
+
+  /* ============ SECTION SCAFFOLD ============ */
+  .band{border-top:1px solid var(--line);margin-top:56px;padding-top:40px}
+  .band__label{font-family:var(--serif);font-size:clamp(1.5rem,3.4vw,2.1rem);
+    font-weight:600;letter-spacing:-0.02em;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .band__label span{font-family:var(--sans);font-size:13px;font-weight:700;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--brand-2)}
+  .band__sub{color:var(--ink-2);margin-top:8px;max-width:70ch}
+
+  /* prereqs */
+  .prereq{display:grid;gap:12px;margin-top:24px}
+  .prereq li{display:flex;gap:13px;align-items:flex-start;
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;box-shadow:var(--shadow)}
+  .prereq svg{flex:none;margin-top:2px;color:var(--brand)}
+  .prereq b{display:block;color:var(--ink)}
+  .prereq span{color:var(--ink-2);font-size:14.5px}
+
+  /* ============ STEPS ============ */
+  .step{padding:34px 0;border-top:1px dashed var(--line)}
+  .step:first-of-type{border-top:none}
+  .step__head{display:flex;gap:16px;align-items:flex-start;margin-bottom:18px}
+  .step__num{flex:none;width:44px;height:44px;border-radius:12px;
+    display:grid;place-items:center;font-family:var(--serif);font-size:1.35rem;font-weight:600;
+    color:var(--surface);background:var(--brand);box-shadow:var(--shadow)}
+  :root[data-theme="dark"] .step__num{color:oklch(0.20 0.02 262)}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .step__num{color:oklch(0.20 0.02 262)}}
+  .step__title{font-size:clamp(1.2rem,2.6vw,1.5rem);font-weight:680;letter-spacing:-0.015em;line-height:1.2;text-wrap:balance}
+  .step__where{font-size:13px;color:var(--ink-2);margin-top:5px;font-weight:600}
+  .step__where .mono{color:var(--brand-2)}
+  .step__body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:26px;align-items:start}
+  @media (max-width:820px){.step__body{grid-template-columns:1fr}}
+  .action{font-size:16.5px}
+  .action b{color:var(--ink)}
+  .expected{margin-top:14px;display:flex;gap:9px;align-items:flex-start;
+    font-size:14.5px;color:var(--ink);background:var(--ok-bg);
+    border:1px solid color-mix(in oklch,var(--ok) 30%,transparent);
+    border-radius:10px;padding:10px 13px}
+  .expected::before{content:"✓";color:var(--ok);font-weight:800;flex:none}
+  .why{margin-top:14px;font-size:14px;color:var(--ink-2);
+    padding-left:14px;border-left:2px solid var(--line-2)}
+  .why b{color:var(--brand-2);font-weight:700}
+  .warn-inline{margin-top:14px;display:flex;gap:9px;align-items:flex-start;
+    font-size:14px;color:var(--ink);background:var(--danger-bg);
+    border:1px solid color-mix(in oklch,var(--danger) 32%,transparent);
+    border-radius:10px;padding:10px 13px}
+  .warn-inline::before{content:"⚠";color:var(--danger);font-weight:800;flex:none}
+
+  /* ============ SHOT / ANNOTATION SYSTEM ============ */
+  .shot{position:relative;border-radius:var(--radius)}
+  .shot__scroll{overflow-x:auto;border-radius:var(--radius);box-shadow:var(--shadow-lg)}
+  .cap{margin-top:10px;font-size:12.5px;color:var(--ink-2);display:flex;gap:7px;align-items:baseline}
+  .cap::before{content:"";width:14px;height:1px;background:var(--line-2);flex:none;position:relative;top:6px}
+  /* corner number badge — lives on .shot, never clipped */
+  .pin{position:absolute;top:-12px;left:-12px;width:30px;height:30px;border-radius:50%;
+    background:var(--brand);color:#fff;display:grid;place-items:center;
+    font-size:14px;font-weight:800;font-family:var(--sans);
+    box-shadow:0 0 0 3px var(--canvas),0 4px 10px #0005;z-index:7}
+  :root[data-theme="dark"] .pin{color:oklch(0.18 0.02 262)}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pin{color:oklch(0.18 0.02 262)}}
+  /* element-anchored highlight ring (never misaligns) */
+  .mark{--mk:#f59e0b;position:relative;border-radius:8px;
+    box-shadow:inset 0 0 0 2.5px var(--mk), 0 0 0 3px color-mix(in srgb,var(--mk) 22%,transparent);z-index:3}
+  .mark--danger{--mk:#ef4444}
+  /* letter badge in the left gutter of a marked element */
+  .blab{position:absolute;top:50%;left:-12px;transform:translateY(-50%);
+    width:23px;height:23px;border-radius:50%;background:#f59e0b;color:#20170a;
+    font-weight:800;font-size:12px;display:grid;place-items:center;
+    box-shadow:0 1px 4px #0006;z-index:6;font-family:var(--sans)}
+  .blab--tl{top:-11px;left:-11px;transform:none}
+  /* sensitive value overlay */
+  .redacted{position:relative;color:transparent!important}
+  .redacted::after{content:"oculto";position:absolute;inset:0;border-radius:5px;
+    background:repeating-linear-gradient(45deg,#3a3f46,#3a3f46 6px,#2c3036 6px,#2c3036 12px);
+    display:grid;place-items:center;color:#cfd4da;font-size:10px;font-weight:700;
+    letter-spacing:.05em;text-transform:uppercase}
+
+  /* ============ BROWSER FRAME ============ */
+  .win{background:var(--chrome);border-radius:12px 12px 0 0;overflow:hidden;min-width:520px}
+  .win__bar{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--chrome)}
+  .win__dots{display:flex;gap:6px;flex:none}
+  .win__dots i{width:11px;height:11px;border-radius:50%;display:block}
+  .win__dots i:nth-child(1){background:#ff5f57}
+  .win__dots i:nth-child(2){background:#febc2e}
+  .win__dots i:nth-child(3){background:#28c840}
+  .win__addr{flex:1;background:color-mix(in oklch,var(--chrome) 70%,#fff 30%);
+    border-radius:7px;padding:5px 11px;font-family:var(--mono);font-size:11.5px;
+    color:var(--chrome-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  :root[data-theme="dark"] .win__addr{background:#1a1f25}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .win__addr{background:#1a1f25}}
+  .win__addr b{color:var(--brand-2);font-weight:700}
+  .win__addr b.mark{color:#b45309;padding:0 3px}
+
+  /* ============ EVOLUTION MOCK (dark) ============ */
+  .evo{background:var(--evo-bg);color:var(--evo-ink);font-size:13px;min-width:520px}
+  .evo__top{display:flex;align-items:center;gap:9px;padding:12px 16px;border-bottom:1px solid var(--evo-line)}
+  .evo__logo{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--evo-teal);flex:none}
+  .evo__brand{font-weight:700;font-size:13px}
+  .evo__body{display:flex;min-height:180px}
+  .evo__nav{flex:none;width:150px;border-right:1px solid var(--evo-line);padding:12px 0;background:var(--evo-surf)}
+  .evo__nav a{display:block;padding:7px 16px;color:var(--evo-mut);font-size:12.5px}
+  .evo__nav a.grp{color:var(--evo-ink);font-weight:600}
+  .evo__nav a.sub{padding-left:28px;font-size:12px}
+  .evo__nav a.on{color:var(--evo-ink);font-weight:700;background:#16211c;border-left:2px solid var(--evo-teal)}
+  .evo__main{flex:1;padding:18px 22px;min-width:0}
+  .evo__h{font-size:15px;font-weight:700;margin-bottom:16px}
+  .fld{margin-bottom:14px}
+  .fld__l{font-size:12px;font-weight:600;color:var(--evo-ink);margin-bottom:5px}
+  .fld__h{font-size:10.5px;color:var(--evo-mut);font-weight:400}
+  .fld__i{background:#0c1310;border:1px solid var(--evo-line);border-radius:7px;
+    padding:8px 11px;font-family:var(--mono);font-size:11.5px;color:var(--evo-ink);min-height:16px}
+  .fld__i.ph{color:var(--evo-mut)}
+  .fld--row{display:flex;justify-content:space-between;align-items:center;gap:12px;
+    border-bottom:1px solid var(--evo-line);padding:6px 0 12px}
+  .tgl{width:38px;height:21px;border-radius:999px;background:#28322d;position:relative;flex:none}
+  .tgl::after{content:"";position:absolute;top:2.5px;left:2.5px;width:16px;height:16px;border-radius:50%;background:#5b6b64}
+  .tgl.on{background:var(--evo-teal)}
+  .tgl.on::after{left:19.5px;background:#eafff6}
+  .btn-teal{background:var(--evo-teal);color:#04140d;font-weight:700;font-size:12px;
+    border-radius:7px;padding:8px 18px;display:inline-block}
+  .evo__login{padding:38px 20px;display:grid;place-items:center;background:var(--evo-bg)}
+  .evo__card{width:min(320px,90%);background:var(--evo-surf);border:1px solid var(--evo-line);
+    border-radius:14px;padding:22px}
+  .evo__card h5{text-align:center;font-size:15px;font-weight:700;margin-bottom:2px}
+  .evo__card p.s{text-align:center;font-size:11px;color:var(--evo-mut);margin-bottom:16px}
+  .req{color:#ff6b6b}
+  .inst{border:1px solid var(--evo-line);border-radius:10px;padding:12px 14px;background:var(--evo-surf);
+    display:flex;align-items:center;gap:12px}
+  .inst .gear{margin-left:auto;color:var(--evo-mut)}
+  .badge-red{background:#3a1518;color:#ff8a8a;font-size:10px;font-weight:700;border-radius:5px;padding:3px 8px}
+  .badge-grn{background:#0f2a20;color:#4fe0a8;font-size:10px;font-weight:700;border-radius:5px;padding:3px 8px}
+
+  /* ============ CHATWOOT MOCK (light) ============ */
+  .cw{background:var(--cw-bg);color:var(--cw-ink);font-size:13px;min-width:520px}
+  .cw__body{display:flex;min-height:170px}
+  .cw__rail{flex:none;width:52px;background:#111a2e;padding:12px 0;display:flex;flex-direction:column;gap:14px;align-items:center}
+  .cw__rail i{width:22px;height:22px;border-radius:6px;background:#243247;display:block}
+  .cw__rail i.on{background:var(--cw-blue)}
+  .cw__logo{width:24px;height:24px;border-radius:50%;background:var(--cw-blue);flex:none}
+  .cw__panel{flex:1;background:var(--cw-surf);padding:18px 20px;min-width:0}
+  .cw__h{font-size:15px;font-weight:700;margin-bottom:4px}
+  .cw__sub{font-size:12px;color:var(--cw-mut);margin-bottom:14px}
+  .cwf{margin-bottom:12px}
+  .cwf__l{font-size:12px;font-weight:600;margin-bottom:5px}
+  .cwf__i{background:#fff;border:1px solid var(--cw-line);border-radius:7px;padding:8px 11px;
+    font-size:12px;color:var(--cw-ink);min-height:16px;font-family:var(--mono)}
+  .cwf__i.ph{color:#9aa5b5}
+  .btn-blue{background:var(--cw-blue);color:#fff;font-weight:700;font-size:12px;border-radius:7px;padding:9px 18px;display:inline-block}
+  .cw__login{padding:34px 20px;display:grid;place-items:center}
+  .cw__card{width:min(340px,92%);background:#fff;border:1px solid var(--cw-line);border-radius:14px;padding:22px;box-shadow:0 10px 30px -18px #1f2d3d40}
+  .cw__logorow{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px;font-weight:700}
+  .cw__list{border:1px solid var(--cw-line);border-radius:10px;overflow:hidden}
+  .cw__row{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--cw-line);background:#fff}
+  .cw__row:last-child{border-bottom:none}
+  .cw__ic{width:26px;height:26px;border-radius:7px;background:#eef3fb;display:grid;place-items:center;color:var(--cw-blue);font-size:11px;font-weight:800;flex:none}
+  .tag-api{margin-left:auto;background:#eef3fb;color:var(--cw-blue);font-size:10px;font-weight:800;border-radius:5px;padding:3px 8px;letter-spacing:.03em}
+  .cw__msg{max-width:70%;width:fit-content;padding:9px 12px;border-radius:12px;font-size:12.5px;margin-bottom:8px}
+  .cw__msg.in{background:#fff;border:1px solid var(--cw-line);border-top-left-radius:3px}
+  .cw__msg.out{background:#e7f0ff;margin-left:auto;border-top-right-radius:3px;color:#0d3a86}
+  .qr{width:118px;height:118px;border-radius:10px;background:
+    repeating-linear-gradient(90deg,#111 0 6px,#fff 6px 12px),
+    repeating-linear-gradient(0deg,#1110 0 6px,#fff0 6px 12px);
+    background-color:#fff;border:6px solid #fff;box-shadow:0 0 0 1px var(--cw-line);margin:0 auto 12px}
+
+  /* field reference table */
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-top:8px}
+  table{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
+  thead th{background:var(--surface-2);text-align:left;padding:11px 14px;font-size:12px;
+    letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2);font-weight:700;border-bottom:1px solid var(--line)}
+  tbody td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:nth-child(even){background:var(--surface-2)}
+  td .k{font-family:var(--mono);font-weight:700;color:var(--ink);font-size:13px}
+  .pill{display:inline-block;font-size:11px;font-weight:800;border-radius:5px;padding:2px 8px}
+  .pill--on{background:var(--ok-bg);color:var(--ok)}
+  .pill--off{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+  .pill--star{background:color-mix(in oklch,var(--brand) 18%,transparent);color:var(--brand-2)}
+
+  /* problems / verify grids */
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:22px}
+  .prob{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+  .prob h4{font-size:15px;font-weight:700;margin-bottom:6px;display:flex;gap:8px;align-items:baseline}
+  .prob h4 .sym{color:var(--danger);font-weight:800}
+  .prob p{font-size:14px;color:var(--ink-2)}
+  .prob p b{color:var(--ink)}
+  .checklist{display:grid;gap:10px;margin-top:20px}
+  .checklist li{display:flex;gap:12px;align-items:flex-start;background:var(--surface);
+    border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+  .checklist .box{flex:none;width:22px;height:22px;border-radius:6px;border:2px solid var(--brand);
+    display:grid;place-items:center;color:var(--brand);font-weight:800;font-size:13px;margin-top:1px}
+  .checklist b{color:var(--ink)}.checklist span{color:var(--ink-2);font-size:14px}
+
+  /* rollback ordered */
+  .roll{counter-reset:r;display:grid;gap:10px;margin-top:8px}
+  .roll li{counter-increment:r;display:flex;gap:14px;align-items:flex-start;
+    padding:12px 4px;border-bottom:1px solid var(--line)}
+  .roll li:last-child{border-bottom:none}
+  .roll li::before{content:counter(r);flex:none;width:28px;height:28px;border-radius:8px;
+    background:var(--danger-bg);color:var(--danger);font-weight:800;display:grid;place-items:center;font-size:13px}
+
+  /* footer */
+  .foot{border-top:1px solid var(--line);margin-top:56px;padding:34px 0 70px;
+    display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:center;color:var(--ink-2);font-size:14px}
+  .foot .own{display:flex;flex-wrap:wrap;gap:22px}
+  .foot b{color:var(--ink)}
+  .sig{font-family:var(--serif);font-style:italic;color:var(--brand-2)}
+
+  /* topology svg */
+  .topo{margin-top:34px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:26px 22px;box-shadow:var(--shadow);overflow-x:auto}
+  .topo svg{width:100%;min-width:560px;height:auto;color:var(--ink)}
+
+  /* motion */
+  @media (prefers-reduced-motion:no-preference){
+    .reveal{opacity:0;transform:translateY(14px);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+  }
+  @keyframes rise{to{opacity:1;transform:none}}
+</style>
+
+<button class="theme" id="themeBtn" type="button" aria-label="Alternar tema">◑ Tema</button>
+
+<div class="wrap">
+
+  <!-- ===================== HERO ===================== -->
+  <header class="hero">
+    <div class="kicker">Runbook operacional · Onboarding de cliente</div>
+    <h1>Conectar a <em>Evolution API</em> ao <em>Chatwoot</em></h1>
+    <p class="lede">Ligue o WhatsApp de um cliente a um painel omnichannel. Ao final, toda conversa
+      cai sozinha numa caixa de entrada do Chatwoot — sem automação, sem IA, sem código.</p>
+    <div class="meta">
+      <span class="chip"><span class="dot"></span> Evolution API <b>2.3.7</b></span>
+      <span class="chip"><span class="dot"></span> Chatwoot <b>4.13.0</b></span>
+      <span class="chip">⏱ <b>~15 min</b></span>
+      <span class="chip">🧩 <b>17 passos</b></span>
+      <span class="chip">👤 Dono: <b>[preencher]</b></span>
+      <span class="chip">🔁 Revisão: <b>[preencher]</b></span>
+    </div>
+
+    <div class="callout callout--when">
+      <h4>▸ Quando usar</h4>
+      <p>Entrou um cliente novo e você precisa que as mensagens de WhatsApp dele apareçam e fiquem
+        registradas numa caixa de entrada do Chatwoot (contatos + conversas). Use este runbook uma vez
+        por cliente. <strong>Não</strong> cobre automações nem IA — isso é um segundo momento.</p>
+    </div>
+
+    <div class="topo" aria-label="Topologia: 1 instância Evolution ligada a 1 conta Chatwoot que gera 1 caixa de entrada">
+      <svg viewBox="0 0 680 128" role="img">
+        <defs>
+          <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+            <path d="M0,0 L9,4.5 L0,9 Z" fill="currentColor" opacity=".55"/>
+          </marker>
+        </defs>
+        <g font-family="system-ui" font-size="12.5" text-anchor="middle">
+          <rect x="6" y="30" width="132" height="60" rx="12" fill="none" stroke="currentColor" stroke-opacity=".28"/>
+          <text x="72" y="56" font-weight="700" fill="currentColor">WhatsApp</text>
+          <text x="72" y="74" font-size="11" fill="currentColor" opacity=".6">nº do cliente</text>
+          <line x1="140" y1="60" x2="172" y2="60" stroke="currentColor" stroke-opacity=".45" marker-end="url(#ar)"/>
+          <rect x="176" y="30" width="132" height="60" rx="12" fill="none" stroke="currentColor" stroke-opacity=".28"/>
+          <text x="242" y="56" font-weight="700" fill="currentColor">Evolution</text>
+          <text x="242" y="74" font-size="11" fill="currentColor" opacity=".6">1 instância</text>
+          <line x1="310" y1="60" x2="342" y2="60" stroke="currentColor" stroke-opacity=".45" marker-end="url(#ar)"/>
+          <rect x="346" y="30" width="132" height="60" rx="12" fill="none" stroke="currentColor" stroke-opacity=".28"/>
+          <text x="412" y="56" font-weight="700" fill="currentColor">Chatwoot</text>
+          <text x="412" y="74" font-size="11" fill="currentColor" opacity=".6">1 conta</text>
+          <line x1="480" y1="60" x2="512" y2="60" stroke="currentColor" stroke-opacity=".45" marker-end="url(#ar)"/>
+          <rect x="516" y="30" width="158" height="60" rx="12" fill="currentColor" fill-opacity=".05" stroke="currentColor" stroke-opacity=".28"/>
+          <text x="595" y="56" font-weight="700" fill="currentColor">Caixa de entrada</text>
+          <text x="595" y="74" font-size="11" fill="currentColor" opacity=".6">tipo API · omnichannel</text>
+          <text x="340" y="116" font-size="11.5" fill="currentColor" opacity=".55">Infra compartilhada · o que muda por cliente é a conta e a instância</text>
+        </g>
+      </svg>
+    </div>
+  </header>
+
+  <!-- ===================== PRÉ-REQUISITOS ===================== -->
+  <section class="band" id="prereq">
+    <h2 class="band__label"><span>Antes de começar</span> Pré-requisitos</h2>
+    <p class="band__sub">Tenha tudo isto em mãos. Faltando um, pare aqui e resolva antes — no meio do fluxo é pior.</p>
+    <ul class="prereq">
+      <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 8 8 8 8s8-3 8-8V6z"/></svg>
+        <div><b>Acesso superadmin ao Chatwoot</b><span> — login em <span class="mono">chat.almaconvert.com.br</span> com permissão de Super Admin.</span></div></li>
+      <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
+        <div><b>Acesso ao Evolution Manager</b><span> — <span class="mono">evo.almaconvert.com.br/manager</span> + a <b>API Key Global</b> (com o responsável técnico).</span></div></li>
+      <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>
+        <div><b>Celular do cliente em mãos</b><span> — com o WhatsApp que vai ser conectado, para ler o QR Code.</span></div></li>
+      <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+        <div><b>Nome definido</b><span> — como a instância e a caixa de entrada vão se chamar (ex.: <span class="mono">instituto-igor</span>).</span></div></li>
+    </ul>
+  </section>
+
+  <!-- ===================== BLOCO 1 — CHATWOOT ===================== -->
+  <section class="band">
+    <h2 class="band__label"><span>Bloco 1 · Chatwoot</span> Preparar a conta e pegar as chaves</h2>
+    <p class="band__sub">Você vai criar a conta do cliente e sair daqui com <strong>dois valores</strong> que a Evolution precisa: o <strong>Account ID</strong> e o <strong>Access Token</strong>.</p>
+  </section>
+
+  <!-- STEP 1 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">1</span>
+      <div><h3 class="step__title">Entre no Chatwoot como superadmin</h3>
+        <p class="step__where">Navegador → <span class="mono">chat.almaconvert.com.br</span></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Abra o endereço, digite seu <b>e-mail</b> e <b>senha</b> de superadmin e clique em <b>Entrar</b>.</p>
+        <p class="expected">Esperado: o painel do Chatwoot abre com a lista de conversas.</p>
+        <div class="why"><b>Por quê:</b> só o superadmin consegue criar contas novas de cliente no passo seguinte.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">1</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://<b>chat.almaconvert.com.br</b>/app/login</div></div>
+          <div class="cw"><div class="cw__login"><div class="cw__card">
+            <div class="cw__logorow"><span class="cw__logo"></span> Entrar no Chatwoot</div>
+            <div class="cwf"><div class="cwf__l">E-mail</div><div class="cwf__i ph">nome@empresa.com.br</div></div>
+            <div class="cwf"><div class="cwf__l">Senha</div><div class="cwf__i ph">••••••••</div></div>
+            <span class="btn-blue mark" style="width:100%;text-align:center;box-sizing:border-box">Entrar</span>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">Tela de login do Chatwoot (recriação fiel · PT-BR) — botão <b>Entrar</b> destacado</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 2 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">2</span>
+      <div><h3 class="step__title">Abra o Super Admin Console</h3>
+        <p class="step__where">Menu do seu perfil → <b>Console do Super Admin</b> · ou <span class="mono">/super_admin</span></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Clique no seu <b>avatar</b> (canto inferior esquerdo) e escolha <b>Console do Super Admin</b>.</p>
+        <p class="expected">Esperado: abre o painel de administração com o menu <b>Accounts</b> (Contas).</p>
+        <div class="why"><b>Por quê:</b> é a área onde ficam todas as contas de cliente. Cada cliente = uma conta isolada.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">2</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://chat.almaconvert.com.br/<b>super_admin</b>/accounts</div></div>
+          <div class="cw"><div class="cw__body">
+            <div class="cw__rail"><span class="cw__logo"></span><i></i><i class="on"></i><i></i><i></i></div>
+            <div class="cw__panel">
+              <div class="cw__h">Super Admin Console</div>
+              <div class="cw__sub">Gerencie contas, usuários e configurações da plataforma</div>
+              <div class="cw__list">
+                <div class="cw__row mark">Accounts <span class="tag-api" style="background:#eef3fb">CONTAS</span></div>
+                <div class="cw__row">Users</div>
+                <div class="cw__row">Settings</div>
+              </div>
+            </div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">Console do Super Admin — item <b>Accounts</b> destacado</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 3 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">3</span>
+      <div><h3 class="step__title">Crie a conta do cliente</h3>
+        <p class="step__where">Super Admin → <b>Accounts</b> → <b>New Account</b></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Clique em <b>New Account</b>, digite o <b>nome do cliente</b> (ex.: <span class="mono">Instituto Dr. Igor</span>) e salve.</p>
+        <p class="expected">Esperado: a nova conta aparece na lista de contas.</p>
+        <div class="why"><b>Por quê:</b> isola as conversas desse cliente das dos demais. Uma conta por cliente, sempre.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">3</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://chat.almaconvert.com.br/super_admin/accounts/<b>new</b></div></div>
+          <div class="cw"><div class="cw__body">
+            <div class="cw__rail"><span class="cw__logo"></span><i></i><i class="on"></i><i></i><i></i></div>
+            <div class="cw__panel">
+              <div class="cw__h">Nova conta</div>
+              <div class="cwf"><div class="cwf__l">Nome da conta</div><div class="cwf__i mark">Instituto Dr. Igor</div></div>
+              <div class="cwf"><div class="cwf__l">Idioma</div><div class="cwf__i ph">Português (BR)</div></div>
+              <span class="btn-blue">Criar conta</span>
+            </div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">Formulário de nova conta — nome do cliente destacado</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 4 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">4</span>
+      <div><h3 class="step__title">Confirme um usuário Administrator na conta</h3>
+        <p class="step__where">Dentro da conta → <b>Configurações → Agentes</b></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Entre na conta criada. Em <b>Configurações → Agentes</b>, garanta que existe (ou adicione) um usuário com a função <b>Administrator</b>.</p>
+        <p class="expected">Esperado: pelo menos um agente com a marca <b>Administrator</b> na lista.</p>
+        <div class="why"><b>Por quê:</b> o token que você vai copiar no passo 6 é o <b>desse usuário</b>. A integração age em nome dele — e ela precisa de permissão de admin para criar a caixa de entrada.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">4</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://chat.almaconvert.com.br/app/accounts/<b>2</b>/agents/new</div></div>
+          <div class="cw"><div class="cw__body">
+            <div class="cw__rail"><span class="cw__logo"></span><i></i><i></i><i></i><i class="on"></i></div>
+            <div class="cw__panel">
+              <div class="cw__h">Agentes</div>
+              <div class="cw__list">
+                <div class="cw__row mark"><span class="cw__ic">MO</span> Você (superadmin) <span class="tag-api" style="background:var(--ok-bg);color:var(--ok)">ADMINISTRATOR</span></div>
+                <div class="cw__row"><span class="cw__ic" style="background:#f3eefb;color:#7c3aed">AT</span> Atendente <span class="tag-api" style="background:#f4f6f9;color:#67748a">AGENT</span></div>
+              </div>
+            </div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">Lista de agentes — a função <b>Administrator</b> destacada</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 5 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">5</span>
+      <div><h3 class="step__title">Anote o Account ID pela URL</h3>
+        <p class="step__where">Barra de endereço → <span class="mono">/accounts/<b>N</b>/…</span></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Com a conta aberta, olhe a barra de endereço. O <b>número depois de <span class="mono">/accounts/</span></b> é o <b>Account ID</b>. Anote-o.</p>
+        <p class="expected">Esperado: você tem o número (ex.: <span class="mono">2</span>). É o <b>N</b> que a Evolution vai pedir.</p>
+        <div class="why"><b>Por quê:</b> é ele que diz à Evolution em qual conta as conversas devem cair. Cada cliente tem o seu.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">5</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://chat.almaconvert.com.br/app/accounts/<b class="mark">2</b>/dashboard</div></div>
+          <div class="cw"><div class="cw__body">
+            <div class="cw__rail"><span class="cw__logo"></span><i class="on"></i><i></i><i></i><i></i></div>
+            <div class="cw__panel"><div class="cw__h">Conversas</div><div class="cw__sub">Instituto Dr. Igor</div>
+              <div class="cw__list"><div class="cw__row"><span class="cw__ic" style="background:#eefbf3;color:#0e9268">✓</span> Tudo pronto para receber mensagens</div></div>
+            </div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">O <b>N</b> em <span class="mono">/accounts/N/</span> é o Account ID (aqui, <b>2</b>)</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 6 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">6</span>
+      <div><h3 class="step__title">Copie o Access Token do seu perfil</h3>
+        <p class="step__where">Avatar → <b>Configurações do Perfil</b> → final da página, <b>Token de acesso</b></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Abra <b>Configurações do Perfil</b>, role até o fim e clique em <b>Copiar</b> no bloco <b>Token de acesso</b>.</p>
+        <p class="expected">Esperado: o token fica na área de transferência. Guarde-o num lugar seguro.</p>
+        <div class="warn-inline">Trate o token como uma <b>senha</b>. Não cole em conversa, e-mail ou print. Ele dá acesso à conta.</div>
+        <div class="why"><b>Por quê:</b> é a credencial que autentica a Evolution na API do Chatwoot.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">6</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://chat.almaconvert.com.br/app/accounts/2/profile/settings</div></div>
+          <div class="cw"><div class="cw__body">
+            <div class="cw__rail"><span class="cw__logo"></span><i></i><i></i><i></i><i class="on"></i></div>
+            <div class="cw__panel">
+              <div class="cw__h">Configurações do Perfil</div>
+              <div class="cw__sub">Token de acesso</div>
+              <p style="font-size:11.5px;color:var(--cw-mut);margin-bottom:8px">Esse token pode ser usado se você estiver criando uma integração baseada em API.</p>
+              <div style="display:flex;gap:8px;align-items:center">
+                <div class="cwf__i redacted" style="flex:1">•••••••••••••••••••••••••</div>
+                <span class="btn-blue mark" style="background:#eef3fb;color:var(--cw-blue)">⧉ Copiar</span>
+              </div>
+            </div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">Bloco <b>Token de acesso</b> — botão <b>Copiar</b> destacado, token oculto</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- ===================== BLOCO 2 — EVOLUTION ===================== -->
+  <section class="band">
+    <h2 class="band__label"><span>Bloco 2 · Evolution</span> Conectar o WhatsApp e ligar a ponte</h2>
+    <p class="band__sub">Agora no Evolution Manager: criar a instância, conectar o número e preencher a integração com os dois valores que você anotou.</p>
+  </section>
+
+  <!-- STEP 7 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">7</span>
+      <div><h3 class="step__title">Entre no Evolution Manager</h3>
+        <p class="step__where">Navegador → <span class="mono">evo.almaconvert.com.br/manager</span></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Abra o Manager. O campo <b>Server URL</b> já vem preenchido. Cole a <b>API Key Global</b> e clique em <b>Login</b>.</p>
+        <p class="expected">Esperado: abre a tela <b>Instances</b> (lista de instâncias).</p>
+        <div class="warn-inline">Você mesmo digita a <b>API Key Global</b> — é uma chave sensível. Peça-a ao responsável técnico; não a compartilhe.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">7</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://<b>evo.almaconvert.com.br</b>/manager/login</div></div>
+          <div class="evo"><div class="evo__login"><div class="evo__card">
+            <h5>Evolution Manager</h5><p class="s">Please enter your credentials to continue</p>
+            <div class="fld"><div class="fld__l">Server URL <span class="req">*</span></div><div class="fld__i">https://evo.almaconvert.com.br</div></div>
+            <div class="fld"><div class="fld__l">API Key Global <span class="req">*</span></div><div class="fld__i redacted">••••••••••••••••</div></div>
+            <span class="btn-teal mark" style="width:100%;text-align:center;box-sizing:border-box">Login</span>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">Login do Evolution Manager (captura real da tela · chave oculta) — botão <b>Login</b> destacado</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 8 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">8</span>
+      <div><h3 class="step__title">Crie a instância do cliente</h3>
+        <p class="step__where">Instances → botão <b>Instance +</b> → modal <b>New Instance</b></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Clique em <b>Instance +</b>. Em <b>Name</b>, use o nome do cliente. Deixe <b>Channel</b> em <b>Baileys</b> e clique em <b>Save</b>.</p>
+        <p class="expected">Esperado: a instância aparece na lista, com status <b>Disconnected</b> (ainda sem WhatsApp).</p>
+        <div class="why"><b>Por quê:</b> a instância é o "ramal" da Evolution que representa o WhatsApp desse cliente. <b>Baileys</b> é o modo que conecta um número via QR Code.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">8</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://evo.almaconvert.com.br/manager/instances</div></div>
+          <div class="evo"><div class="evo__top"><span class="evo__logo"></span><span class="evo__brand">Evolution Manager</span></div>
+            <div class="evo__login" style="padding:24px 20px"><div class="evo__card" style="width:min(340px,92%)">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><b style="font-size:13px">New Instance</b><span style="color:var(--evo-mut)">✕</span></div>
+              <div class="fld"><div class="fld__l">Name <span class="req">*</span></div><div class="fld__i mark"><span class="blab">A</span>instituto-igor</div></div>
+              <div class="fld"><div class="fld__l">Channel</div><div class="fld__i" style="display:flex;justify-content:space-between">Baileys <span style="color:var(--evo-mut)">▾</span></div></div>
+              <div class="fld"><div class="fld__l">Token</div><div class="fld__i ph">gerado automaticamente</div></div>
+              <div class="fld"><div class="fld__l">Number</div><div class="fld__i ph">5575…</div></div>
+              <div style="text-align:right"><span class="btn-teal mark"><span class="blab">B</span>Save</span></div>
+            </div></div>
+          </div></div>
+        </div></div>
+        <figcaption class="cap">Modal <b>New Instance</b> — <b>A</b> campo Name · <b>B</b> botão Save</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 9 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">9</span>
+      <div><h3 class="step__title">Abra o QR Code da instância</h3>
+        <p class="step__where">Instances → clique no <b>⚙️</b> ao lado do nome → <b>QR Code</b></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Na lista, clique no <b>⚙️</b> ao lado da instância para abrir os detalhes. Um <b>QR Code</b> aparece na tela.</p>
+        <p class="expected">Esperado: um QR Code grande, pronto para ser escaneado.</p>
+        <div class="warn-inline">Não compartilhe esse QR. Quem o escanear conecta o WhatsApp do cliente. Use-o na hora e feche.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">9</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://evo.almaconvert.com.br/manager/instance/…/dashboard</div></div>
+          <div class="evo"><div class="evo__top"><span class="evo__logo"></span><span class="evo__brand">instituto-igor</span><span class="badge-red" style="margin-left:auto">Disconnected</span></div>
+            <div class="evo__login" style="padding:22px"><div style="text-align:center">
+              <div class="qr mark"></div>
+              <p style="font-size:11.5px;color:var(--evo-mut)">Escaneie no WhatsApp do cliente</p>
+            </div></div>
+          </div></div>
+        </div></div>
+        <figcaption class="cap">Tela de conexão com o <b>QR Code</b> (representação · QR não é real)</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 10 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">10</span>
+      <div><h3 class="step__title">Escaneie o QR pelo WhatsApp do cliente</h3>
+        <p class="step__where">Celular → WhatsApp → <b>Aparelhos conectados</b> → <b>Conectar aparelho</b></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">No celular do cliente: WhatsApp → <b>Aparelhos conectados</b> → <b>Conectar um aparelho</b> → aponte para o QR.</p>
+        <p class="expected">Esperado: o status da instância muda para <b>Connected</b> (verde).</p>
+        <div class="why"><b>Por quê:</b> é o que autoriza a Evolution a enviar e receber mensagens por aquele número. Sem isto, nada trafega.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">10</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://evo.almaconvert.com.br/manager/instances</div></div>
+          <div class="evo"><div class="evo__top"><span class="evo__logo"></span><span class="evo__brand">Evolution Manager</span></div>
+            <div class="evo__main">
+              <div class="inst"><div><b>instituto-igor</b><div style="color:var(--evo-mut);font-size:11px" class="mono">•••• •••• token</div></div>
+                <span class="badge-grn mark">Connected</span><span class="gear">⚙️</span></div>
+            </div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">Instância com status <b>Connected</b> — WhatsApp ligado</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 11 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">11</span>
+      <div><h3 class="step__title">Abra a integração Chatwoot da instância</h3>
+        <p class="step__where">Detalhes da instância → menu lateral → <b>Integrations → Chatwoot</b></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">No menu lateral da instância, abra <b>Integrations</b> e clique em <b>Chatwoot</b>.</p>
+        <p class="expected">Esperado: abre a tela <b>Chatwoot</b> com o formulário de configuração.</p>
+        <div class="why"><b>Por quê:</b> é aqui que a Evolution aprende a "conversar" com o Chatwoot da conta que você preparou.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">11</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://evo.almaconvert.com.br/manager/instance/…/<b>chatwoot</b></div></div>
+          <div class="evo"><div class="evo__top"><span class="evo__logo"></span><span class="evo__brand">Evolution Manager</span></div>
+            <div class="evo__body">
+              <nav class="evo__nav">
+                <a>Dashboard</a><a class="grp">Configurations ▾</a><a class="grp">Events ▾</a>
+                <a class="grp">Integrations ▾</a>
+                <a class="sub">Evolution Bot</a><a class="sub on mark">Chatwoot</a><a class="sub">Typebot</a><a class="sub">OpenAI</a>
+              </nav>
+              <div class="evo__main"><div class="evo__h">Chatwoot</div>
+                <p style="color:var(--evo-mut);font-size:12px">Formulário de configuração da integração →</p></div>
+            </div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">Menu <b>Integrations → Chatwoot</b> selecionado</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 12 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">12</span>
+      <div><h3 class="step__title">Preencha os campos da integração</h3>
+        <p class="step__where">Tela <b>Chatwoot</b> → de cima para baixo</p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Ligue <b>Enabled</b> e preencha os campos com os valores da tabela abaixo. Os principais são <b>Chatwoot URL</b>, <b>Account ID</b> e <b>Token</b> (o que você copiou no passo 6).</p>
+        <div class="warn-inline">Na <b>Chatwoot URL</b>, <b>não</b> deixe barra <span class="mono">/</span> no final. Isso quebra a integração.</div>
+        <p class="expected">Esperado: todos os campos preenchidos, sem salvar ainda (o Save é o passo 13).</p>
+      </div>
+      <figure class="shot">
+        <div class="pin">12</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://evo.almaconvert.com.br/manager/instance/…/chatwoot</div></div>
+          <div class="evo"><div class="evo__body">
+            <nav class="evo__nav"><a>Dashboard</a><a class="grp">Integrations ▾</a><a class="sub on">Chatwoot</a><a class="sub">Typebot</a><a class="sub">OpenAI</a></nav>
+            <div class="evo__main">
+              <div class="fld--row mark"><div><div class="fld__l">Enabled</div><div class="fld__h">Enable or disable the app</div></div><span class="tgl on"></span><span class="blab blab--tl">A</span></div>
+              <div class="fld" style="margin-top:14px"><div class="fld__l">Chatwoot URL</div><div class="fld__i mark mark--danger"><span class="blab">B</span>https://chat.almaconvert.com.br</div></div>
+              <div class="fld"><div class="fld__l">Account ID</div><div class="fld__i mark"><span class="blab">C</span>2</div></div>
+              <div class="fld"><div class="fld__l">Token</div><div class="fld__i mark redacted"><span class="blab">D</span>•••••••••••••••••</div></div>
+              <div class="fld--row"><div><div class="fld__l">Merge Brazil Contacts</div><div class="fld__h">Junta o 9º dígito no mesmo contato</div></div><span class="tgl on"></span></div>
+            </div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">Formulário Chatwoot — <b>A</b> Enabled · <b>B</b> URL (sem "/") · <b>C</b> Account ID · <b>D</b> Token</figcaption>
+      </figure>
+    </div>
+    <div style="margin-top:22px">
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Campo</th><th>O que preencher</th><th>Por quê</th></tr></thead>
+        <tbody>
+          <tr><td><span class="k">Enabled</span></td><td><span class="pill pill--on">ligado</span></td><td>Ativa a integração.</td></tr>
+          <tr><td><span class="k">Chatwoot URL</span></td><td class="mono">https://chat.almaconvert.com.br</td><td><b>Sem "/" no final.</b> Endereço do Chatwoot.</td></tr>
+          <tr><td><span class="k">Account ID</span></td><td class="mono">2 <span style="font-family:var(--sans)">(o N do passo 5)</span></td><td>Diz em qual conta as conversas caem.</td></tr>
+          <tr><td><span class="k">Token</span></td><td>o Access Token do passo 6</td><td>Autentica a Evolution no Chatwoot.</td></tr>
+          <tr><td><span class="k">Sign Messages</span></td><td><span class="pill pill--off">desligado</span></td><td>Evita anexar "— nome do atendente" nas mensagens.</td></tr>
+          <tr><td><span class="k">Sign Delimiter</span></td><td class="mono">\n</td><td>Só usado se Sign Messages estiver ligado.</td></tr>
+          <tr><td><span class="k">Name Inbox</span></td><td class="mono">instituto-igor</td><td>Nome da caixa de entrada que será criada.</td></tr>
+          <tr><td><span class="k">Organization</span></td><td class="mono">Bot</td><td>Nome do contato-robô que a Evolution cria.</td></tr>
+          <tr><td><span class="k">Logo</span></td><td>(opcional)</td><td>Foto do contato-robô.</td></tr>
+          <tr><td><span class="k">Conversation Pending</span></td><td><span class="pill pill--off">desligado</span></td><td>Conversas entram como "abertas", não "pendentes".</td></tr>
+          <tr><td><span class="k">Merge Brazil Contacts</span></td><td><span class="pill pill--on">ligado</span> <span class="pill pill--star">essencial BR</span></td><td>Resolve o 9º dígito — evita contato duplicado.</td></tr>
+          <tr><td><span class="k">Import Contacts</span></td><td><span class="pill pill--on">ligado</span></td><td>Importa a agenda do WhatsApp (opcional).</td></tr>
+          <tr><td><span class="k">Import Messages</span></td><td><span class="pill pill--on">ligado</span></td><td>Importa histórico recente (opcional).</td></tr>
+          <tr><td><span class="k">Days Limit Import</span></td><td class="mono">7</td><td>Limita a importação aos últimos dias.</td></tr>
+          <tr><td><span class="k">Reopen Conversation</span></td><td><span class="pill pill--on">ligado</span></td><td>Mensagem nova reabre a mesma conversa.</td></tr>
+          <tr><td><span class="k">Auto Create</span></td><td><span class="pill pill--on">ligado</span> <span class="pill pill--star">passo 13</span></td><td>Cria a caixa de entrada e o webhook sozinho.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </article>
+
+  <!-- STEP 13 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">13</span>
+      <div><h3 class="step__title">Ligue o Auto Create e salve</h3>
+        <p class="step__where">Final da tela Chatwoot → <b>Auto Create</b> + <b>Save</b></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Role até o fim, ligue <b>Auto Create</b> e clique em <b>Save</b>.</p>
+        <p class="expected">Esperado: mensagem de sucesso. A caixa de entrada é criada sozinha no Chatwoot.</p>
+        <div class="why"><b>Por quê:</b> o <b>Auto Create</b> faz a Evolution criar a caixa de entrada (tipo API) e configurar o retorno das mensagens. Por isso você <b>não</b> cria canal manualmente no Chatwoot.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">13</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://evo.almaconvert.com.br/manager/instance/…/chatwoot</div></div>
+          <div class="evo"><div class="evo__main" style="padding:22px 26px">
+            <div class="fld--row"><div><div class="fld__l">Reopen Conversation</div><div class="fld__h">Conversations reopen on new message</div></div><span class="tgl on"></span></div>
+            <div class="fld--row mark" style="margin-top:6px"><div><div class="fld__l">Auto Create</div><div class="fld__h">Create the inbox automatically</div></div><span class="tgl on"></span><span class="blab blab--tl">A</span></div>
+            <div style="text-align:right;margin-top:18px"><span class="btn-teal mark"><span class="blab">B</span>Save</span></div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap"><b>A</b> ligar Auto Create · <b>B</b> clicar em Save</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- ===================== BLOCO 3 — VERIFICAÇÃO ===================== -->
+  <section class="band">
+    <h2 class="band__label"><span>Bloco 3 · Verificação</span> Provar que funcionou</h2>
+    <p class="band__sub">Quatro checagens rápidas. Se as quatro passarem, o omnichannel está no ar.</p>
+  </section>
+
+  <!-- STEP 14 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">14</span>
+      <div><h3 class="step__title">Confirme a caixa de entrada no Chatwoot</h3>
+        <p class="step__where">Chatwoot → <b>Configurações → Caixas de entrada</b></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Volte ao Chatwoot da conta e abra <b>Configurações → Caixas de entrada</b>.</p>
+        <p class="expected">Esperado: aparece a caixa com o nome que você definiu, do tipo <b>API</b>.</p>
+        <div class="why"><b>Por quê:</b> é a prova de que o <b>Auto Create</b> funcionou.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">14</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://chat.almaconvert.com.br/app/accounts/2/settings/inboxes/list</div></div>
+          <div class="cw"><div class="cw__body">
+            <div class="cw__rail"><span class="cw__logo"></span><i></i><i></i><i></i><i class="on"></i></div>
+            <div class="cw__panel"><div class="cw__h">Caixas de entrada</div>
+              <div class="cw__list"><div class="cw__row mark"><span class="cw__ic">📥</span> instituto-igor <span class="tag-api">API</span></div></div>
+            </div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">A caixa <b>instituto-igor</b> do tipo <b>API</b> criada automaticamente</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 15 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">15</span>
+      <div><h3 class="step__title">Teste o recebimento</h3>
+        <p class="step__where">De um WhatsApp qualquer → para o número do cliente</p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">De um celular de teste, mande uma mensagem para o número do cliente.</p>
+        <p class="expected">Esperado: em segundos, surge uma <b>conversa nova</b> na caixa de entrada.</p>
+      </div>
+      <figure class="shot">
+        <div class="pin">15</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://chat.almaconvert.com.br/app/accounts/2/inbox/…</div></div>
+          <div class="cw"><div class="cw__body">
+            <div class="cw__rail"><span class="cw__logo"></span><i class="on"></i><i></i><i></i><i></i></div>
+            <div class="cw__panel"><div class="cw__h">Conversas · instituto-igor</div>
+              <div style="margin-top:8px"><div class="cw__msg in mark">Oi, vi o anúncio de vocês 👋</div></div>
+            </div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">Mensagem de teste chega como conversa nova</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 16 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">16</span>
+      <div><h3 class="step__title">Teste o envio</h3>
+        <p class="step__where">Chatwoot → responder na conversa</p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Responda a essa conversa <b>pelo Chatwoot</b> e envie.</p>
+        <p class="expected">Esperado: a resposta chega no WhatsApp do celular de teste.</p>
+        <div class="why"><b>Por quê:</b> valida o caminho de volta (o retorno que o <b>Auto Create</b> configurou).</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">16</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://chat.almaconvert.com.br/app/accounts/2/inbox/…</div></div>
+          <div class="cw"><div class="cw__body">
+            <div class="cw__rail"><span class="cw__logo"></span><i class="on"></i><i></i><i></i><i></i></div>
+            <div class="cw__panel"><div class="cw__h">Conversas · instituto-igor</div>
+              <div style="margin-top:8px"><div class="cw__msg in">Oi, vi o anúncio de vocês 👋</div>
+                <div class="cw__msg out mark">Olá! Que bom falar com você. Como posso ajudar?</div></div>
+            </div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">Resposta enviada pelo Chatwoot sai no WhatsApp</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- STEP 17 -->
+  <article class="step">
+    <div class="step__head">
+      <span class="step__num">17</span>
+      <div><h3 class="step__title">Confirme o contato único</h3>
+        <p class="step__where">Chatwoot → <b>Contatos</b></p></div>
+    </div>
+    <div class="step__body">
+      <div class="step__text">
+        <p class="action">Abra <b>Contatos</b> e procure o número de teste.</p>
+        <p class="expected">Esperado: <b>um</b> contato só — não dois (com e sem o 9º dígito).</p>
+        <div class="why"><b>Por quê:</b> confirma que o <b>Merge Brazil Contacts</b> está fazendo efeito.</div>
+      </div>
+      <figure class="shot">
+        <div class="pin">17</div>
+        <div class="shot__scroll"><div class="win"><div class="win__bar"><div class="win__dots"><i></i><i></i><i></i></div>
+          <div class="win__addr">https://chat.almaconvert.com.br/app/accounts/2/contacts</div></div>
+          <div class="cw"><div class="cw__body">
+            <div class="cw__rail"><span class="cw__logo"></span><i></i><i class="on"></i><i></i><i></i></div>
+            <div class="cw__panel"><div class="cw__h">Contatos</div>
+              <div class="cw__list"><div class="cw__row mark"><span class="cw__ic">👤</span> Contato de teste <span class="tag-api" style="background:var(--ok-bg);color:var(--ok)">1 REGISTRO</span></div></div>
+            </div>
+          </div></div></div>
+        </div></div>
+        <figcaption class="cap">Um único contato — sem duplicata do 9º dígito</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- ===================== VERIFICAÇÃO FINAL ===================== -->
+  <section class="band" id="verificacao">
+    <h2 class="band__label"><span>Checklist</span> Verificação final</h2>
+    <ul class="checklist">
+      <li><span class="box">✓</span><div><b>Caixa de entrada criada</b> <span>— aparece em Configurações → Caixas de entrada, tipo API.</span></div></li>
+      <li><span class="box">✓</span><div><b>Recebe mensagem</b> <span>— WhatsApp de teste vira conversa nova.</span></div></li>
+      <li><span class="box">✓</span><div><b>Envia mensagem</b> <span>— resposta pelo Chatwoot chega no WhatsApp.</span></div></li>
+      <li><span class="box">✓</span><div><b>Sem contato duplicado</b> <span>— um único registro por número.</span></div></li>
+    </ul>
+  </section>
+
+  <!-- ===================== PROBLEMAS COMUNS ===================== -->
+  <section class="band" id="problemas">
+    <h2 class="band__label"><span>Se travar</span> Problemas comuns</h2>
+    <div class="grid2">
+      <div class="prob"><h4><span class="sym">▸</span> Recebe, mas não envia</h4>
+        <p>Quase sempre é a <b>Chatwoot URL com "/" no final</b>, o <b>Token sem permissão de admin</b>, ou o <b>Auto Create desligado</b>. Volte ao passo 12/13, corrija e clique em <b>Save</b> de novo.</p></div>
+      <div class="prob"><h4><span class="sym">▸</span> Nada chega na caixa</h4>
+        <p>Verifique se a instância está <b>Connected</b> (passo 10), se o <b>Account ID</b> é o número certo da URL (passo 5) e se o <b>Enabled</b> está ligado (passo 12).</p></div>
+      <div class="prob"><h4><span class="sym">▸</span> Contatos duplicados</h4>
+        <p>O <b>Merge Brazil Contacts</b> está desligado. Ligue-o no passo 12 e salve. Os próximos contatos deixam de duplicar.</p></div>
+    </div>
+  </section>
+
+  <!-- ===================== ROLLBACK ===================== -->
+  <section class="band" id="rollback">
+    <h2 class="band__label"><span>Desfazer</span> Rollback</h2>
+    <p class="band__sub">Precisa reverter? Desligar a integração interrompe o espelhamento na hora — sem apagar o que já foi salvo.</p>
+    <ol class="roll">
+      <li><div><b>Desligue o Enabled</b> na tela Chatwoot da instância e clique em Save. Isso interrompe o espelhamento imediatamente.</div></li>
+      <li><div><b>(Opcional) Exclua a caixa de entrada</b> criada, em Configurações → Caixas de entrada.</div></li>
+      <li><div><b>(Opcional) Desconecte ou exclua a instância</b> no Evolution Manager.</div></li>
+    </ol>
+    <div class="callout c-warn" style="margin-top:18px"><h4>ℹ Nota</h4>
+      <p>As conversas e contatos <b>já registrados</b> permanecem no Chatwoot. O rollback só corta o fluxo novo — não apaga histórico.</p></div>
+  </section>
+
+  <!-- ===================== FOOTER ===================== -->
+  <footer class="foot">
+    <div class="own">
+      <span>👤 <b>Dono do runbook:</b> [preencher]</span>
+      <span>🔁 <b>Próxima revisão:</b> [preencher — +90 dias]</span>
+    </div>
+    <span class="sig">Prospect · Runbook operacional</span>
+  </footer>
+
+</div>
+
+<script>
+  (function(){
+    var root=document.documentElement, btn=document.getElementById('themeBtn');
+    function cur(){var a=root.getAttribute('data-theme');if(a)return a;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}
+    btn.addEventListener('click',function(){
+      var next=cur()==='dark'?'light':'dark';
+      root.setAttribute('data-theme',next);
+      btn.textContent=(next==='dark'?'◐':'◑')+' Tema';
+    });
+  })();
+</script>
